@@ -902,6 +902,15 @@ LOCAL int ICACHE_FLASH_ATTR strStartsWith(const ushort *str1, int len1, const us
 }
 
 
+int ICACHE_FLASH_ATTR wstrcmp(const ushort *str1, const ushort *str2)
+{
+    while (*str1 && (*str1 == *str2))
+    {
+    	str1++;
+    	str2++;
+    }
+    return *str1 - *str2;
+}
 
 LOCAL int ICACHE_FLASH_ATTR strIsEqual(const ushort *str1, const ushort *str2, int length)
 {

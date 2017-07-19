@@ -74,13 +74,17 @@ int ICACHE_FLASH_ATTR dispTitleScrollStep(int reset)
 }
 
 
-void ICACHE_FLASH_ATTR dispFillMem(uchar data, int lines)
+void ICACHE_FLASH_ATTR dispFillMem(uchar data, int row, int height)
 {
-	uint i;
-    for (i = 0; i < memHeight && lines > 0; i++, lines--)
+    for (; row < memHeight && height > 0; row++, height--)
     {
-        os_memset(pMem[i], data, DISP_MEMWIDTH);
+        os_memset(pMem[row], data, DISP_MEMWIDTH);
     }
+}
+
+void ICACHE_FLASH_ATTR dispClearMem(int row, int height)
+{
+	dispFillMem(0, row, height);
 }
 
 LOCAL void ICACHE_FLASH_ATTR dispDrawBitmap(int x, int y, int bmWidth, int bmHeight, const uint *bitmap, int bitmapSize)

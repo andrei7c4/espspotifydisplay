@@ -111,60 +111,12 @@ LOCAL int ICACHE_FLASH_ATTR utf8strlen(char *str, int strLen)
 	return length;
 }
 
-int ICACHE_FLASH_ATTR decodeUtf8(char *str, int strLen, ushort **utf8str)
+int ICACHE_FLASH_ATTR decodeUtf8(const char *str, int strLen, ushort **utf8str)
 {
-	int i = 0;
-	int length = 0;
-	*utf8str = (ushort*)os_malloc((utf8strlen(str, strLen) + 1)*sizeof(ushort));
-	if (!*utf8str)
-	{
-		return 0;
-	}
-	ushort *pUtf8str = *utf8str;
-	ushort utf8ch;
-
-	while (*str)
-	{
-		if (*str == '\\' && *(str+1) == 'u')
-		{
-			i += 6;
-			if (i > strLen)
-			{
-				*pUtf8str = '\0';
-				return length;
-			}
-
-			str += 2;
-			utf8ch = asciiHexStrToBin(str, 4);
-			if (utf8ch != (ushort)ERROR)
-			{
-				*pUtf8str = utf8ch;
-				pUtf8str++;
-				length++;
-			}
-			str += 4;
-		}
-		else if (*str == '\\' && *(str+1) == 'U')
-		{
-			i += 10;
-			if (i > strLen)
-			{
-				*pUtf8str = '\0';
-				return length;
-			}
-			str += 10;
-		}
-		else
-		{
-			*pUtf8str = *str;
-			pUtf8str++;
-			length++;
-			str++;
-			i++;
-		}
-	}
-	*pUtf8str = '\0';
-	return length;
+	int bufSize = strLen+1;
+	os_free(*utf8str);
+	*utf8str = (ushort*)os_malloc(bufSize*sizeof(ushort));
+	return u8_toucs(*utf8str, bufSize, str, strLen);
 }
 
 int ICACHE_FLASH_ATTR strToWstr(const char *str, int strLen, ushort **wstr)

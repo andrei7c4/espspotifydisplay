@@ -23,7 +23,8 @@ typedef enum{
 void dispSetActiveMemBuf(MemBufType memBuf);
 void dispCopySecMemBufToMain(void);
 int dispTitleScrollStep(int reset);
-void dispFillMem(uchar data, int lines);
+void dispFillMem(uchar data, int row, int height);
+void dispClearMem(int row, int height);
 
 void drawImage(int x, int y, const uint *image);
 void drawBitmapPixelByPixel(int x, int y, int bmWidth, int bmHeight, const uint *bitmap, int bitmapSize);

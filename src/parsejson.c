@@ -1,5 +1,6 @@
 #include <os_type.h>
 #include <osapi.h>
+#include <mem.h>
 #include "contikijson/jsonparse.h"
 #include "contikijson/jsontree.h"
 #include "parsejson.h"
@@ -44,6 +45,29 @@ LOCAL int ICACHE_FLASH_ATTR getNextString(struct jsonparse_state *state, int dep
 	return jsonparse_copy_value(state, str, strSize);
 }
 
+LOCAL int ICACHE_FLASH_ATTR getNextStringAlloc(struct jsonparse_state *state, int depth, const char *name, char **str)
+{
+	if (!jumpToNextType(state, depth, JSON_TYPE_PAIR_NAME, name))
+		return 0;
+
+	if (jsonparse_next(state) != JSON_TYPE_STRING)
+		return 0;
+
+	int bufSize = jsonparse_get_len(state)+1;
+	*str = (char*)os_malloc(bufSize);
+	return jsonparse_copy_value(state, *str, bufSize);
+}
+
+LOCAL int ICACHE_FLASH_ATTR getNextStringAllocUtf8(struct jsonparse_state *state, int depth, const char *name, ushort **str)
+{
+	char *temp = NULL;
+	int length = getNextStringAlloc(state, depth, name, &temp);
+	if (!temp) return 0;
+	length = decodeUtf8(temp, length, str);
+	os_free(temp);
+	return length;
+}
+
 LOCAL int ICACHE_FLASH_ATTR getNextInt(struct jsonparse_state *state, int depth, const char *name, int *value)
 {
 	char buf[11];
@@ -78,8 +102,7 @@ int ICACHE_FLASH_ATTR parseTokens(const char *json, int jsonLen,
 	return OK;
 }
 
-int ICACHE_FLASH_ATTR parseTrackInfo(const char *json, int jsonLen,
-		StrBuf *idStr, StrBuf *trackName, StrBuf *artist)
+int ICACHE_FLASH_ATTR parseTrackInfo(const char *json, int jsonLen, TrackInfo *track)
 {
 	struct jsonparse_state state;
 	jsonparse_setup(&state, json, jsonLen);
@@ -90,14 +113,12 @@ int ICACHE_FLASH_ATTR parseTrackInfo(const char *json, int jsonLen,
 	if (!jumpToNextType(&state, 3, JSON_TYPE_ARRAY, NULL))
 		return ERROR;
 
-	if ((artist->strLen = getNextString(&state, 4, "name", artist->buf, artist->bufSize)) == 0)
+	if ((track->artist.length = getNextStringAllocUtf8(&state, 4, "name", &track->artist.str)) == 0)
 		return ERROR;
 	// TODO: parse multiple artists
 
-	if ((idStr->strLen = getNextString(&state, 2, "id", idStr->buf, idStr->bufSize)) == 0)
-		return ERROR;
 
-	if ((trackName->strLen = getNextString(&state, 2, "name", trackName->buf, trackName->bufSize)) == 0)
+	if ((track->name.length = getNextStringAllocUtf8(&state, 2, "name", &track->name.str)) == 0)
 		return ERROR;
 
 	return OK;

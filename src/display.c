@@ -7,9 +7,15 @@
 
 
 extern void SSD1322_cpyMemBuf(uchar mem[][DISP_MEMWIDTH], int memRow, uchar dispRow, int height);
-void ICACHE_FLASH_ATTR dispUpdate(DispPage page)
+
+void ICACHE_FLASH_ATTR dispUpdate(int row, int height)
 {
-	SSD1322_cpyMemBuf(mem, 0, page*DISP_HEIGHT, DISP_HEIGHT);
+	SSD1322_cpyMemBuf(mem, row, row, height);
+}
+
+void ICACHE_FLASH_ATTR dispUpdateFull(void)
+{
+	dispUpdate(0, DISP_HEIGHT);
 }
 
 
@@ -146,43 +152,43 @@ void ICACHE_FLASH_ATTR dispUndimmStart(void)
 	}
 }
 
-
-extern void displayScrollDone(void);
-// exponential easing in (approx. 0.5s): pow(2, 10*(((curLine-1)/62)-1))*40+1
-LOCAL const uchar scrollIntervals[63] = {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,3,3,3,3,3,4,4,4,5,5,6,6,7,8,8,9,10,11,13,14,16,17,19,21,24,27,30,33,37,41};
-LOCAL void ICACHE_FLASH_ATTR displayScrollTmrCb(void)
-{
-	dispScrollCurLine++;
-	dispScrollCurLine &= 0x7F;
-	SSD1322_setStartLine(dispScrollCurLine);
-	if (dispScrollCurLine == 0 || dispScrollCurLine == 64)
-	{
-		displayScrollDone();
-	}
-	else
-	{
-		int line = dispScrollCurLine >= 65 ? dispScrollCurLine-65 : dispScrollCurLine-1;
-		os_timer_arm(&scrollTmr, scrollIntervals[line], 0);
-	}
-}
-
-void ICACHE_FLASH_ATTR scrollDisplay(void)
-{
-	os_timer_disarm(&scrollTmr);
-
-	if (dispScrollCurLine == 0 || dispScrollCurLine == 64)
-	{
-		dispUpdate(dispScrollCurLine == 0 ? Page1 : Page0);
-	}
-	else	// interrupted scroll
-	{
-		dispUpdate(dispScrollCurLine < 64 ? Page1 : Page0);
-	}
-
-	os_timer_disarm(&scrollTmr);
-	os_timer_setfn(&scrollTmr, (os_timer_func_t *)displayScrollTmrCb, NULL);
-	os_timer_arm(&scrollTmr, 1, 0);
-}
+//
+//extern void displayScrollDone(void);
+//// exponential easing in (approx. 0.5s): pow(2, 10*(((curLine-1)/62)-1))*40+1
+//LOCAL const uchar scrollIntervals[63] = {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,3,3,3,3,3,4,4,4,5,5,6,6,7,8,8,9,10,11,13,14,16,17,19,21,24,27,30,33,37,41};
+//LOCAL void ICACHE_FLASH_ATTR displayScrollTmrCb(void)
+//{
+//	dispScrollCurLine++;
+//	dispScrollCurLine &= 0x7F;
+//	SSD1322_setStartLine(dispScrollCurLine);
+//	if (dispScrollCurLine == 0 || dispScrollCurLine == 64)
+//	{
+//		displayScrollDone();
+//	}
+//	else
+//	{
+//		int line = dispScrollCurLine >= 65 ? dispScrollCurLine-65 : dispScrollCurLine-1;
+//		os_timer_arm(&scrollTmr, scrollIntervals[line], 0);
+//	}
+//}
+//
+//void ICACHE_FLASH_ATTR scrollDisplay(void)
+//{
+//	os_timer_disarm(&scrollTmr);
+//
+//	if (dispScrollCurLine == 0 || dispScrollCurLine == 64)
+//	{
+//		dispUpdate(dispScrollCurLine == 0 ? Page1 : Page0);
+//	}
+//	else	// interrupted scroll
+//	{
+//		dispUpdate(dispScrollCurLine < 64 ? Page1 : Page0);
+//	}
+//
+//	os_timer_disarm(&scrollTmr);
+//	os_timer_setfn(&scrollTmr, (os_timer_func_t *)displayScrollTmrCb, NULL);
+//	os_timer_arm(&scrollTmr, 1, 0);
+//}
 
 
 void ICACHE_FLASH_ATTR dispSetOrientation(Orientation orientation)
@@ -201,7 +207,7 @@ void ICACHE_FLASH_ATTR dispSetOrientation(Orientation orientation)
 		break;
 	default: return;
 	}
-	dispUpdate(dispScrollCurLine == 0 ? Page0 : Page1);
+	dispUpdateFull();
 	dispOrient = orientation;
 }
 

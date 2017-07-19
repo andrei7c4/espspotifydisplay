@@ -5,6 +5,12 @@
 #include "fonts.h"
 
 
+typedef struct
+{
+	ushort *str;
+	int length;
+}StrBuf;
+
 typedef struct StrListItem StrListItem;
 typedef struct StrList StrList;
 
@@ -30,6 +36,7 @@ int drawStrHighlight_Latin(const Font *font, int x, int y, const char *str);
 void drawStrWidthLim(const Font *font, int x, int y, const ushort *str, int width);
 int drawStrWordWrapped(int x0, int y0, int x1, int y1, const ushort *str,
 		const Font *fontReg, const Font *fontBold, const StrList *boldStrList, int forceDraw);
+int wstrcmp(const ushort *str1, const ushort *str2);
 int replaceLinks(ushort *str, int length);
 int replaceHtmlEntities(ushort *str, int length);
 

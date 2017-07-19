@@ -14,20 +14,15 @@ typedef enum {
 }Orientation;
 extern Orientation dispOrient;
 
-typedef enum{
-	Page0 = 0,
-	Page1
-}DispPage;
 
-void dispUpdate(DispPage page);
+void dispUpdate(int row, int height);
+void dispUpdateFull(void);
 
 extern int dispScrollCurLine;
 
 void dispDimmingStart(void);
 void dispVerticalSqueezeStart(void);
 void dispUndimmStart(void);
-
-void scrollDisplay(void);
 
 void dispSetOrientation(Orientation orientation);
 

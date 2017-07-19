@@ -29,19 +29,13 @@ char authBasicStr[100] = "";
 #define DEFAULT_AUTH_CODE		""
 char auth_code[400];	// TODO:
 
+TrackInfo curTrack = {{0,0},{0,0},0,0,0};
 
-typedef struct
+LOCAL void ICACHE_FLASH_ATTR trackInfoFree(TrackInfo *track)
 {
-	char idStr[50];
-	ushort *name;
-	int nameLen;
-	ushort *artist;
-	int artistLen;
-	int duration;
-	int progress;
-	int isPlaying;
-}TrackInfo;
-TrackInfo curTrack = {{0},0,0,0,0,0,0,0};
+	os_free(track->name);
+	os_free(track->artist);
+}
 
 
 LOCAL os_timer_t gpTmr;
@@ -162,7 +156,7 @@ void user_init(void)
 	uart_init(BIT_RATE_921600, BIT_RATE_921600);
 
 	dispSetActiveMemBuf(MainMemBuf);
-	dispFillMem(0, DISP_HEIGHT);
+	dispClearMem(0, DISP_HEIGHT);
 
 //configInit(&config);
 //configWrite(&config);
@@ -171,6 +165,11 @@ void user_init(void)
 	os_strcpy(auth_code, DEFAULT_AUTH_CODE);
 	initAuthBasicStr();
 	
+	curTrack.name.str = (ushort*)os_malloc(sizeof(ushort));
+	curTrack.name.str[0] = 0;
+	curTrack.artist.str = (ushort*)os_malloc(sizeof(ushort));
+	curTrack.artist.str[0] = 0;
+
 	debug("Built on %s %s\n", __DATE__, __TIME__);
 	debug("SDK version %s\n", system_get_sdk_version());
 	debug("free heap %d\n", system_get_free_heap_size());
@@ -193,7 +192,7 @@ void user_init(void)
 	SSD1322_init();
 
 	drawSpotifyLogo();
-	dispUpdate(Page0);
+	dispUpdateFull();
 	wakeupDisplay();
 	
 		//wifi_set_opmode(NULL_MODE);
@@ -584,6 +583,9 @@ LOCAL void ICACHE_FLASH_ATTR parseAuthReply(void)
 	httpRxMsgCurLen = 0;
 }
 
+
+
+
 LOCAL void ICACHE_FLASH_ATTR parseApiReply(void)
 {
 	debug("parseApiReply, len %d\n", httpRxMsgCurLen);
@@ -600,69 +602,53 @@ LOCAL void ICACHE_FLASH_ATTR parseApiReply(void)
 
 	if (apiConnParams.requestFunc == getCurrentlyPlaying)
 	{
-		//char id[50];
-		//int trackSize = 128;
-		//char *track = (char*)os_malloc(trackSize);
-		//int artistSize = 128;
-		//char *artist = (char*)os_malloc(artistSize);
-
-		StrBuf id = {(char*)os_malloc(50), 50, 0};
-		StrBuf name = {(char*)os_malloc(128), 128, 0};
-		StrBuf artist = {(char*)os_malloc(128), 128, 0};
-
-		if (parseTrackInfo(json, jsonLen, &id, &name, &artist) == OK)
+		TrackInfo track;
+		os_memset(&track, 0, sizeof(TrackInfo));
+		if (parseTrackInfo(json, jsonLen, &track) == OK)
 		{
-			if (os_strcmp(curTrack.idStr, id.buf))
+			if (wstrcmp(curTrack.name.str, track.name.str))
 			{
-				debug("\ntrack: %s, len %d\n", name.buf, name.strLen);
-//				int i;
-//				for (i = 0; i < name.strLen; i++)
-//				{
-//					debug("%02X ", name.buf[i]);
-//				}
-//				debug("\n");
-				debug("\nArtist: %s\n", artist.buf);
-
-
-				os_strcpy(curTrack.idStr, id.buf);
-
-				int bufSize = name.strLen+1;
-				curTrack.name = (ushort*)os_malloc(bufSize*sizeof(ushort));
-				curTrack.nameLen = u8_toucs(curTrack.name, bufSize, name.buf, name.strLen);
-
-				bufSize = artist.strLen+1;
-				curTrack.artist = (ushort*)os_malloc(bufSize*sizeof(ushort));
-				curTrack.artistLen = u8_toucs(curTrack.artist, bufSize, artist.buf, artist.strLen);
-
-				// TODO: move to own function
+				// TODO: scroll animation on track/artist change
+				debug("new track\n");
 				dispSetActiveMemBuf(MainMemBuf);
-				dispFillMem(0, DISP_HEIGHT);
-				drawStr(&arial13b, 0, 0, curTrack.name, curTrack.nameLen);
-				drawStr(&arial13, 0, 20, curTrack.artist, curTrack.artistLen);
-				os_free(curTrack.name);
-				os_free(curTrack.artist);
-				scrollDisplay();
+				dispClearMem(0, 20);
+				drawStr(&arial13b, 0, 0, track.name.str, track.name.length);
+				dispUpdate(0, 20);
+
+				if (wstrcmp(curTrack.artist.str, track.artist.str))
+				{
+					debug("new artist\n");
+					dispClearMem(20, 20);
+					drawStr(&arial13, 0, 20, track.artist.str, track.artist.length);
+					dispUpdate(20, 20);
+				}
+				else debug("same artist\n");
+
 				wakeupDisplay();
+			}
+			else
+			{
+				debug("same track\n");
+			}
 
-			}else debug("same track\n");
+			// TODO: draw track progress
+
+			trackInfoFree(&curTrack);
+			curTrack = track;
 		}
-		else debug("parseTrack failed\n");
-
-		os_free(id.buf);
-		os_free(name.buf);
-		os_free(artist.buf);
+		else
+		{
+			debug("parseTrack failed\n");
+			trackInfoFree(&track);
+		}
 
 		os_timer_arm(&pollCurTrackTmr, 10000, 0);
+		debug("heap: %u\n", system_get_free_heap_size());
 	}
 
 	httpRxMsgCurLen = 0;
 }
 
-
-void ICACHE_FLASH_ATTR displayScrollDone(void)
-{
-
-}
 
 
 
@@ -681,11 +667,6 @@ LOCAL Button adcValToButton(uint16 adcVal)
 
 LOCAL void ICACHE_FLASH_ATTR buttonsScanTmrCb(void)
 {
-	if (dispScrollCurLine != 0 && dispScrollCurLine != 64)
-	{
-		return;		// currently scrolling display, ignore buttons
-	}
-
 	static Button prevButtons = NotPressed;
 	uint16 adcVal = system_adc_read();
 	Button buttons = adcValToButton(adcVal);
