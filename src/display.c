@@ -5,17 +5,28 @@
 #include "display.h"
 
 
+#define TITLE_SCROLL_INTERVAL		20
 
 extern void SSD1322_cpyMemBuf(uchar mem[][DISP_MEMWIDTH], int memRow, uchar dispRow, int height);
 
 void ICACHE_FLASH_ATTR dispUpdate(int row, int height)
 {
-	SSD1322_cpyMemBuf(mem, row, row, height);
+	SSD1322_cpyMemBuf(mem1, row, row, height);
 }
 
 void ICACHE_FLASH_ATTR dispUpdateFull(void)
 {
 	dispUpdate(0, DISP_HEIGHT);
+}
+
+LOCAL void ICACHE_FLASH_ATTR dispUpdateTitle(void)
+{
+	dispUpdate(0, TITLE_HEIGHT);
+}
+
+LOCAL void ICACHE_FLASH_ATTR dispUpdateTitleArtist(void)
+{
+	dispUpdate(0, ARTIST_OFFSET+ARTIST_HEIGHT);
 }
 
 
@@ -40,7 +51,7 @@ LOCAL void ICACHE_FLASH_ATTR horizontalSqueezeTmrCb(void)
 	{
 		drawPixelNormal(squeezeColumn, 0, 0);
 		drawPixelNormal(255-squeezeColumn, 0, 0);
-		SSD1322_cpyMemBuf(mem2, 0, dispScrollCurLine+squeezeRow, 1);
+		SSD1322_cpyMemBuf(pMem, 0, dispScrollCurLine+squeezeRow, 1);
 		squeezeColumn++;
 	}
 	else
@@ -55,22 +66,63 @@ LOCAL void ICACHE_FLASH_ATTR horizontalSqueezeTmrCb(void)
 			SSD1322_setContrast(contrastCurValue);
 		}
 
-		SSD1322_cpyMemBuf(mem, squeezeRow, dispScrollCurLine+squeezeRow, 1);	// restore middle row
 		dispSetActiveMemBuf(MainMemBuf);
+		SSD1322_cpyMemBuf(pMem, squeezeRow, dispScrollCurLine+squeezeRow, 1);	// restore middle row
 	}
 }
 
+
+
+LOCAL void ICACHE_FLASH_ATTR titleScrollTmrCb(void)
+{
+	if (dispTitleScrollStep())
+	{
+		os_timer_disarm(&scrollTmr);
+	}
+	dispUpdateTitle();
+}
+
+void ICACHE_FLASH_ATTR scrollTitle(void)
+{
+	initTitleScroll();
+	os_timer_disarm(&scrollTmr);
+	os_timer_setfn(&scrollTmr, (os_timer_func_t *)titleScrollTmrCb, NULL);
+	os_timer_arm(&scrollTmr, TITLE_SCROLL_INTERVAL, 1);
+}
+
+
+LOCAL void ICACHE_FLASH_ATTR titleArtistScrollTmrCb(void)
+{
+	if (dispTitleScrollStep() & dispArtistScrollStep())
+	{
+		os_timer_disarm(&scrollTmr);
+	}
+	dispUpdateTitleArtist();
+}
+
+void ICACHE_FLASH_ATTR scrollTitleArtist(void)
+{
+	initTitleScroll();
+	initArtistScroll();
+	os_timer_disarm(&scrollTmr);
+	os_timer_setfn(&scrollTmr, (os_timer_func_t *)titleArtistScrollTmrCb, NULL);
+	os_timer_arm(&scrollTmr, TITLE_SCROLL_INTERVAL, 1);
+}
+
+
+
+
 LOCAL void ICACHE_FLASH_ATTR horizontalSqueezeStart(void)
 {
-	dispSetActiveMemBuf(SecondaryMemBuf);
-	dispFillMem(0, 1);
+	dispSetActiveMemBuf(TempMemBuf);
+	dispFillMem(0, 0, 1);
 	squeezeColumn = 30;
 	int x;
 	for (x = squeezeColumn; x < DISP_WIDTH-squeezeColumn; x++)
 	{
 		drawPixelNormal(x, 0, 1);
 	}
-	SSD1322_cpyMemBuf(mem2, 0, dispScrollCurLine+squeezeRow, 1);
+	SSD1322_cpyMemBuf(pMem, 0, dispScrollCurLine+squeezeRow, 1);
 
 	os_timer_disarm(&dimmingTmr);
 	os_timer_setfn(&dimmingTmr, (os_timer_func_t *)horizontalSqueezeTmrCb, NULL);

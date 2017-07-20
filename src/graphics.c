@@ -16,9 +16,11 @@ void inverseColor(int inverse)
 }
 
 
-uchar mem[DISP_HEIGHT][DISP_MEMWIDTH];
-uchar mem2[TITLE_HEIGHT][DISP_MEMWIDTH];
-static uchar (*pMem)[DISP_MEMWIDTH] = mem;
+uchar mem1[DISP_HEIGHT][DISP_MEMWIDTH];
+static uchar mem2[TITLE_HEIGHT][DISP_MEMWIDTH];
+static uchar mem3[ARTIST_HEIGHT][DISP_MEMWIDTH];
+static uchar mem4[1][DISP_MEMWIDTH];
+uchar (*pMem)[DISP_MEMWIDTH] = mem1;
 int memHeight = DISP_HEIGHT;
 
 
@@ -27,52 +29,23 @@ void ICACHE_FLASH_ATTR dispSetActiveMemBuf(MemBufType memBuf)
 	switch (memBuf)
 	{
 	case MainMemBuf:
-		pMem = mem;
+		pMem = mem1;
 		memHeight = DISP_HEIGHT;
 		break;
-	case SecondaryMemBuf:
+	case TitleMemBuf:
 		pMem = mem2;
 		memHeight = TITLE_HEIGHT;
 		break;
+	case ArtistMemBuf:
+		pMem = mem3;
+		memHeight = ARTIST_HEIGHT;
+		break;
+	case TempMemBuf:
+		pMem = mem4;
+		memHeight = 1;
+		break;
 	}
 }
-
-void ICACHE_FLASH_ATTR dispCopySecMemBufToMain(void)
-{
-	int i;
-	for (i = 0; i < TITLE_HEIGHT; i++)
-	{
-		os_memcpy(mem[i], mem2[i], DISP_MEMWIDTH);
-	}
-}
-
-int ICACHE_FLASH_ATTR dispTitleScrollStep(int reset)
-{
-	int y;
-	static int y2 = 0;
-	if (reset)
-	{
-		y2 = 0;
-	}
-
-	for (y = 0; y < (TITLE_HEIGHT-1); y++)
-	{
-		os_memcpy(mem[y], mem[y+1], DISP_MEMWIDTH);
-	}
-	os_memcpy(mem[y], mem2[y2], DISP_MEMWIDTH);
-
-	if (y2 < (TITLE_HEIGHT-1))
-	{
-		y2++;
-	}
-	else
-	{
-		y2 = 0;
-		return TRUE;	// one round done
-	}
-	return FALSE;
-}
-
 
 void ICACHE_FLASH_ATTR dispFillMem(uchar data, int row, int height)
 {
@@ -86,6 +59,75 @@ void ICACHE_FLASH_ATTR dispClearMem(int row, int height)
 {
 	dispFillMem(0, row, height);
 }
+
+void ICACHE_FLASH_ATTR dispClearMemAll(void)
+{
+	dispFillMem(0, 0, memHeight);
+}
+
+void ICACHE_FLASH_ATTR dispCopySecMemBufToMain(void)
+{
+	int i;
+	for (i = 0; i < TITLE_HEIGHT; i++)
+	{
+		os_memcpy(mem1[i], mem2[i], DISP_MEMWIDTH);
+	}
+}
+
+
+typedef struct
+{
+	int offset;
+	int height;
+	int y2;
+	uchar (*pMem)[DISP_MEMWIDTH];
+}Scroll;
+Scroll titleScroll = {TITLE_OFFSET, TITLE_HEIGHT, 0, mem2};
+Scroll artistScroll = {ARTIST_OFFSET, ARTIST_HEIGHT, 0, mem3};
+
+void ICACHE_FLASH_ATTR initTitleScroll(void)
+{
+	titleScroll.y2 = 0;
+}
+
+void ICACHE_FLASH_ATTR initArtistScroll(void)
+{
+	artistScroll.y2 = 0;
+}
+
+LOCAL int ICACHE_FLASH_ATTR dispScrollStep(Scroll *scroll)
+{
+	int y;
+	if (scroll->y2 < (scroll->height-1))
+	{
+		for (y = scroll->offset; y < (scroll->offset + scroll->height - 1); y++)
+		{
+			os_memcpy(mem1[y], mem1[y+1], DISP_MEMWIDTH);
+		}
+		os_memcpy(mem1[y], scroll->pMem[scroll->y2], DISP_MEMWIDTH);
+		scroll->y2++;
+	}
+	else
+	{
+		return TRUE;	// one round done
+	}
+	return FALSE;
+}
+
+int ICACHE_FLASH_ATTR dispTitleScrollStep(void)
+{
+	return dispScrollStep(&titleScroll);
+}
+
+int ICACHE_FLASH_ATTR dispArtistScrollStep(void)
+{
+	return dispScrollStep(&artistScroll);
+}
+
+
+
+
+
 
 LOCAL void ICACHE_FLASH_ATTR dispDrawBitmap(int x, int y, int bmWidth, int bmHeight, const uint *bitmap, int bitmapSize)
 {

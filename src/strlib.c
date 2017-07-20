@@ -520,8 +520,8 @@ int ICACHE_FLASH_ATTR drawStr(const Font *font, int x, int y, const ushort *str,
 		length = strLength(str);
 	}
 
-    int minYoffset = strMinYoffset(font, str, length);
-    y -= minYoffset;
+    //int minYoffset = strMinYoffset(font, str, length);
+    //y -= minYoffset;
 
 	int strWidth = 0;
     while (*str && length > 0)

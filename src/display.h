@@ -18,6 +18,10 @@ extern Orientation dispOrient;
 void dispUpdate(int row, int height);
 void dispUpdateFull(void);
 
+void scrollTitle(void);
+void scrollTitleArtist(void);
+
+
 extern int dispScrollCurLine;
 
 void dispDimmingStart(void);

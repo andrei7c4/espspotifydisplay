@@ -191,7 +191,8 @@ void user_init(void)
 
 	SSD1322_init();
 
-	drawSpotifyLogo();
+	//drawSpotifyLogo();
+	dispClearMemAll();
 	dispUpdateFull();
 	wakeupDisplay();
 	
@@ -608,21 +609,25 @@ LOCAL void ICACHE_FLASH_ATTR parseApiReply(void)
 		{
 			if (wstrcmp(curTrack.name.str, track.name.str))
 			{
-				// TODO: scroll animation on track/artist change
 				debug("new track\n");
-				dispSetActiveMemBuf(MainMemBuf);
-				dispClearMem(0, 20);
+				dispSetActiveMemBuf(TitleMemBuf);
+				dispClearMemAll();
 				drawStr(&arial13b, 0, 0, track.name.str, track.name.length);
-				dispUpdate(0, 20);
 
 				if (wstrcmp(curTrack.artist.str, track.artist.str))
 				{
 					debug("new artist\n");
-					dispClearMem(20, 20);
-					drawStr(&arial13, 0, 20, track.artist.str, track.artist.length);
-					dispUpdate(20, 20);
+					dispSetActiveMemBuf(ArtistMemBuf);
+					dispClearMemAll();
+					drawStr(&arial13, 0, 0, track.artist.str, track.artist.length);
+					scrollTitleArtist();
 				}
-				else debug("same artist\n");
+				else
+				{
+					debug("same artist\n");
+					scrollTitle();
+				}
+
 
 				wakeupDisplay();
 			}

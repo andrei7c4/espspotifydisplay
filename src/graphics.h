@@ -8,23 +8,39 @@
 #define DISP_WIDTH		256
 #define DISP_MEMWIDTH	(DISP_WIDTH/8)
 
-#define TITLE_HEIGHT	13
+#define TITLE_OFFSET	0
+#define TITLE_HEIGHT	20
 
-extern uchar mem[DISP_HEIGHT][DISP_MEMWIDTH];
-extern uchar mem2[TITLE_HEIGHT][DISP_MEMWIDTH];
+#define ARTIST_OFFSET	20
+#define ARTIST_HEIGHT	20
+
+
+extern uchar mem1[DISP_HEIGHT][DISP_MEMWIDTH];
+extern uchar (*pMem)[DISP_MEMWIDTH];
 extern int memHeight;
 
 typedef enum{
 	MainMemBuf,
-	SecondaryMemBuf
+	TitleMemBuf,
+	ArtistMemBuf,
+	TempMemBuf
 }MemBufType;
 
-
 void dispSetActiveMemBuf(MemBufType memBuf);
-void dispCopySecMemBufToMain(void);
-int dispTitleScrollStep(int reset);
+
 void dispFillMem(uchar data, int row, int height);
 void dispClearMem(int row, int height);
+void dispClearMemAll(void);
+
+void dispCopySecMemBufToMain(void);
+
+
+void initTitleScroll(void);
+void initArtistScroll(void);
+
+int dispTitleScrollStep(void);
+int dispArtistScrollStep(void);
+
 
 void drawImage(int x, int y, const uint *image);
 void drawBitmapPixelByPixel(int x, int y, int bmWidth, int bmHeight, const uint *bitmap, int bitmapSize);
