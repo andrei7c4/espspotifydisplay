@@ -87,6 +87,15 @@ LOCAL int ICACHE_FLASH_ATTR getNextInt(struct jsonparse_state *state, int depth,
 	return TRUE;
 }
 
+LOCAL int ICACHE_FLASH_ATTR getNextBool(struct jsonparse_state *state, int depth, const char *name, int *value)
+{
+	if (!jumpToNextType(state, depth, JSON_TYPE_PAIR_NAME, name))
+		return FALSE;
+
+	*value = (jsonparse_next(state) == JSON_TYPE_TRUE);
+	return TRUE;
+}
+
 
 int ICACHE_FLASH_ATTR parseTokens(const char *json, int jsonLen,
 		char *accessToken, int accessTokenSize,
@@ -113,6 +122,9 @@ int ICACHE_FLASH_ATTR parseTrackInfo(const char *json, int jsonLen, TrackInfo *t
 	jsonparse_setup(&state, json, jsonLen);
 
 	if (!getNextInt(&state, 1, "progress_ms", &track->progress))
+		return ERROR;
+
+	if (!getNextBool(&state, 1, "is_playing", &track->isPlaying))
 		return ERROR;
 
 	if (!jumpToNextType(&state, 1, JSON_TYPE_PAIR_NAME, "item"))

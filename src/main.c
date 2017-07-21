@@ -41,6 +41,7 @@ LOCAL void ICACHE_FLASH_ATTR trackInfoFree(TrackInfo *track)
 LOCAL os_timer_t gpTmr;
 LOCAL os_timer_t httpRxTmr;
 LOCAL os_timer_t pollCurTrackTmr;
+LOCAL os_timer_t progressTmr;
 LOCAL os_timer_t buttonsTmr;
 LOCAL os_timer_t screenSaverTmr;
 LOCAL os_timer_t accelTmr;
@@ -89,6 +90,7 @@ LOCAL void onTcpDisconnected(void *arg);
 LOCAL void reconnect(void);
 LOCAL void onTcpReconnCb(void *arg, sint8 err);
 LOCAL void pollCurTrackTmrCb(void);
+LOCAL void progressTmrCb(void);
 LOCAL void buttonsScanTmrCb(void);
 LOCAL void drawSpotifyLogo(void);
 LOCAL void wakeupDisplay(void);
@@ -141,6 +143,9 @@ void user_init(void)
 
 	os_timer_disarm(&pollCurTrackTmr);
 	os_timer_setfn(&pollCurTrackTmr, (os_timer_func_t*)pollCurTrackTmrCb, NULL);
+
+	os_timer_disarm(&progressTmr);
+	os_timer_setfn(&progressTmr, (os_timer_func_t*)progressTmrCb, NULL);
 
 	os_timer_disarm(&scrollTmr);
 	os_timer_disarm(&buttonsTmr);
@@ -519,6 +524,56 @@ LOCAL void pollCurTrackTmrCb(void)
 }
 
 
+LOCAL void ICACHE_FLASH_ATTR updateTrackProgress(int progress, int duration)
+{
+	dispSetActiveMemBuf(MainMemBuf);
+	dispClearMem(50, 14);
+
+	char timeStr[7];
+	int minutes = progress / 60;
+	int seconds = progress % 60;
+	int len = ets_snprintf(timeStr, sizeof(timeStr), "%d:%02d", minutes, seconds);
+	drawStr_Latin(&arial13, 0, 50, timeStr, len);
+
+	minutes = duration / 60;
+	seconds = duration % 60;
+	len = ets_snprintf(timeStr, sizeof(timeStr), "%d:%02d", minutes, seconds);
+	int timeStrWidth = drawStrAlignRight_Latin(&arial13, DISP_WIDTH-1, 50, timeStr, len);
+
+	int barX = timeStrWidth + 7;
+	int barMaxWidth = DISP_WIDTH - (barX*2);
+	float progressPercent = ((float)progress) / duration;
+	int barWidth = progressPercent * barMaxWidth + 0.5;
+	if (barWidth > 0)
+	{
+		int barHeight = 4;
+		int barY = 57;
+		int barX2 = barX+barWidth-1;
+		int barY2 = barY+barHeight-1;
+		drawRect(barX, barY, barX2, barY2, 1);
+		drawPixel(barX, barY, 0);
+		drawPixel(barX, barY2, 0);
+		drawPixel(barX2, barY, 0);
+		drawPixel(barX2, barY2, 0);
+	}
+
+	dispUpdate(50, 14);
+}
+
+LOCAL void ICACHE_FLASH_ATTR progressTmrCb(void)
+{
+	if (curTrack.progress < curTrack.duration)
+	{
+		curTrack.progress++;
+		updateTrackProgress(curTrack.progress, curTrack.duration);
+	}
+	else
+	{
+		os_timer_disarm(&progressTmr);
+	}
+}
+
+
 LOCAL void ICACHE_FLASH_ATTR requestTokens(void)
 {
     spotifyRequestTokens(authConnParams.host, auth_code);
@@ -533,14 +588,6 @@ LOCAL void ICACHE_FLASH_ATTR getCurrentlyPlaying(void)
 {
     spotifyGetCurrentlyPlaying(apiConnParams.host);
 }
-
-
-
-
-
-
-
-
 
 
 
@@ -638,43 +685,14 @@ LOCAL void ICACHE_FLASH_ATTR parseApiReply(void)
 				debug("same track\n");
 			}
 
-			// TODO: draw track progress
-			dispSetActiveMemBuf(MainMemBuf);
-			dispClearMem(50, 14);
-
-			int progress = track.progress / 1000;
-			int minutes = progress / 60;
-			int seconds = progress % 60;
-			char timeStr[7];
-			int len = ets_snprintf(timeStr, sizeof(timeStr), "%d:%02d", minutes, seconds);
-			drawStr_Latin(&arial13, 0, 50, timeStr, len);
-
-			int duration = track.duration / 1000;
-			minutes = duration / 60;
-			seconds = duration % 60;
-			len = ets_snprintf(timeStr, sizeof(timeStr), "%d:%02d", minutes, seconds);
-			int timeStrWidth = drawStrAlignRight_Latin(&arial13, DISP_WIDTH-1, 50, timeStr, len);
-
-			int barX = timeStrWidth + 7;
-			int barMaxWidth = DISP_WIDTH - (barX*2);
-			float progressPercent = ((float)track.progress) / track.duration;
-			int barWidth = progressPercent * barMaxWidth + 0.5;
-			if (barWidth > 0)
+			track.progress /= 1000;		// no need for ms precision
+			track.duration /= 1000;
+			updateTrackProgress(track.progress, track.duration);
+			os_timer_disarm(&progressTmr);
+			if (track.isPlaying)
 			{
-				int barHeight = 4;
-				int barY = 57;
-				int barX2 = barX+barWidth-1;
-				int barY2 = barY+barHeight-1;
-				drawRect(barX, barY, barX2, barY2, 1);
-				drawPixel(barX, barY, 0);
-				drawPixel(barX, barY2, 0);
-				drawPixel(barX2, barY, 0);
-				drawPixel(barX2, barY2, 0);
+				os_timer_arm(&progressTmr, 1000, 1);
 			}
-
-
-			dispUpdate(50, 14);
-
 
 			trackInfoFree(&curTrack);
 			curTrack = track;
