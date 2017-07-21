@@ -34,7 +34,7 @@ TrackInfo curTrack = {{0,0},{0,0},0,0,0};
 LOCAL void ICACHE_FLASH_ATTR trackInfoFree(TrackInfo *track)
 {
 	os_free(track->name);
-	os_free(track->artist);
+	strListClear(&track->artists);
 }
 
 
@@ -167,8 +167,6 @@ void user_init(void)
 	
 	curTrack.name.str = (ushort*)os_malloc(sizeof(ushort));
 	curTrack.name.str[0] = 0;
-	curTrack.artist.str = (ushort*)os_malloc(sizeof(ushort));
-	curTrack.artist.str[0] = 0;
 
 	debug("Built on %s %s\n", __DATE__, __TIME__);
 	debug("SDK version %s\n", system_get_sdk_version());
@@ -614,12 +612,17 @@ LOCAL void ICACHE_FLASH_ATTR parseApiReply(void)
 				dispClearMemAll();
 				drawStr(&arial13b, 0, 0, track.name.str, track.name.length);
 
-				if (wstrcmp(curTrack.artist.str, track.artist.str))
+				if (!strListEqual(&curTrack.artists, &track.artists))
 				{
 					debug("new artist\n");
 					dispSetActiveMemBuf(ArtistMemBuf);
 					dispClearMemAll();
-					drawStr(&arial13, 0, 0, track.artist.str, track.artist.length);
+
+					StrBuf separator;
+					ushort sepStr[] = {',', ' ', '\0'};
+					separator.str = sepStr;
+					separator.length = NELEMENTS(sepStr)-1;
+					strListDraw(&arial13, 0, 0, &track.artists, &separator);
 					scrollTitleArtist();
 				}
 				else
@@ -627,7 +630,6 @@ LOCAL void ICACHE_FLASH_ATTR parseApiReply(void)
 					debug("same artist\n");
 					scrollTitle();
 				}
-
 
 				wakeupDisplay();
 			}

@@ -9,6 +9,7 @@
 #include "conv.h"
 
 
+LOCAL int minDepth = 0;
 LOCAL int ICACHE_FLASH_ATTR jumpToNextType(struct jsonparse_state *state, int depth, int type, const char *name)
 {
 	char buf[50];
@@ -29,6 +30,10 @@ LOCAL int ICACHE_FLASH_ATTR jumpToNextType(struct jsonparse_state *state, int de
 			{
 				return TRUE;
 			}
+		}
+		else if (state->depth < minDepth)
+		{
+			return 0;
 		}
 	}
 	return FALSE;
@@ -113,10 +118,16 @@ int ICACHE_FLASH_ATTR parseTrackInfo(const char *json, int jsonLen, TrackInfo *t
 	if (!jumpToNextType(&state, 3, JSON_TYPE_ARRAY, NULL))
 		return ERROR;
 
-	if ((track->artist.length = getNextStringAllocUtf8(&state, 4, "name", &track->artist.str)) == 0)
+	ushort *str;
+	int length;
+	minDepth = 3;
+	while ((length = getNextStringAllocUtf8(&state, 4, "name", &str)) > 0)
+	{
+		strListAppend(&track->artists, str, length);
+	}
+	minDepth = 0;
+	if (track->artists.count < 1)
 		return ERROR;
-	// TODO: parse multiple artists
-
 
 	if ((track->name.length = getNextStringAllocUtf8(&state, 2, "name", &track->name.str)) == 0)
 		return ERROR;

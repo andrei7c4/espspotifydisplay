@@ -7,7 +7,7 @@
 typedef struct
 {
 	StrBuf name;
-	StrBuf artist;
+	StrList artists;
 	int duration;
 	int progress;
 	int isPlaying;

@@ -114,7 +114,6 @@ LOCAL int ICACHE_FLASH_ATTR utf8strlen(char *str, int strLen)
 int ICACHE_FLASH_ATTR decodeUtf8(const char *str, int strLen, ushort **utf8str)
 {
 	int bufSize = strLen+1;
-	os_free(*utf8str);
 	*utf8str = (ushort*)os_malloc(bufSize*sizeof(ushort));
 	return u8_toucs(*utf8str, bufSize, str, strLen);
 }

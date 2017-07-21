@@ -115,17 +115,74 @@ void ICACHE_FLASH_ATTR strSplit(const ushort *str, StrList *list)
     }
 }
 
-void ICACHE_FLASH_ATTR clearStrList(StrList *list)
+int ICACHE_FLASH_ATTR strListEqual(StrList *list1, StrList *list2)
+{
+	if (list1->count != list2->count)
+	{
+		return FALSE;
+	}
+	StrListItem *item1 = list1->first;
+	StrListItem *item2 = list2->first;
+	while (item1 && item2)
+	{
+		if (wstrcmp(item1->str, item2->str))
+		{
+			return FALSE;
+		}
+		item1 = item1->next;
+		item2 = item2->next;
+	}
+	return TRUE;
+}
+
+void ICACHE_FLASH_ATTR strListAppend(StrList *list, const ushort *str, int length)
+{
+	StrListItem *item = allocStrListItem(str, length);
+    if (!item)
+    {
+        return;
+    }
+	if (!list->first)
+	{
+		list->first = item;
+		list->last = item;
+		list->count = 1;
+	}
+	else
+	{
+		list->last->next = item;
+		list->last = item;
+		list->count++;
+	}
+}
+
+void ICACHE_FLASH_ATTR strListDraw(const Font *font, int x, int y, StrList *list, StrBuf *separator)
+{
+    StrListItem *item = list->first;
+    while (item)
+    {
+    	x += drawStr(font, x, y, item->str, item->length);
+    	item = item->next;
+    	if (item)
+    	{
+        	x += drawStr(font, x, y, separator->str, separator->length);
+    	}
+    }
+}
+
+void ICACHE_FLASH_ATTR strListClear(StrList *list)
 {
     StrListItem *item = list->first;
     StrListItem *next;
     while (item)
     {
+    	os_free(item->str);
         next = item->next;
         os_free(item);
         item = next;
     }
     list->first = NULL;
+    list->last = NULL;
     list->count = 0;
 }
 
@@ -411,62 +468,6 @@ LOCAL void ICACHE_FLASH_ATTR splitWordsToLines(WordList *wordList, LineList *lin
     }
 }
 
-
-
-
-
-
-
-
-
-
-int ICACHE_FLASH_ATTR drawStrWordWrapped(int x0, int y0, int x1, int y1, const ushort *str,
-		const Font *fontReg, const Font *fontBold, const StrList *boldStrList, int forceDraw)
-{
-    x0 = clampInt(x0, 0, DISP_WIDTH-1);
-    x1 = clampInt(x1, 0, DISP_WIDTH-1);
-    y0 = clampInt(y0, 0, memHeight-1);
-    y1 = clampInt(y1, 0, memHeight-1);
-
-    int width = x1-x0+1;
-    int height = y1-y0+1;
-
-    StrList list;
-    strSplit(str, &list);
-
-    WordList words;
-    strListToWordList(&list, &words, fontReg, fontBold, boldStrList);
-    //printWordList(&words);
-
-    LineList lines;
-    splitWordsToLines(&words, &lines, width, 20);
-    //printLineList(&lines);
-
-//	int fit = lines.compressedHeight <= height;
-//	if (fit || forceDraw)
-//	{
-//		drawLineList(x0, y0, height, &lines, lines.height > height);
-//	}
-    int fit;
-    if (forceDraw)
-    {
-    	fit = lines.compressedHeight <= height;
-    	drawLineList(x0, y0, height, &lines, lines.height > height);
-    }
-    else
-    {
-    	fit = lines.height <= height;
-    	if (fit)
-    	{
-        	drawLineList(x0, y0, height, &lines, FALSE);
-    	}
-    }
-
-	clearLineList(&lines);
-    clearWordList(&words);
-    clearStrList(&list);
-	return fit;
-}
 
 
 
