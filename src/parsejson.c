@@ -112,6 +112,9 @@ int ICACHE_FLASH_ATTR parseTrackInfo(const char *json, int jsonLen, TrackInfo *t
 	struct jsonparse_state state;
 	jsonparse_setup(&state, json, jsonLen);
 
+	if (!getNextInt(&state, 1, "progress_ms", &track->progress))
+		return ERROR;
+
 	if (!jumpToNextType(&state, 1, JSON_TYPE_PAIR_NAME, "item"))
 		return ERROR;
 
@@ -127,6 +130,9 @@ int ICACHE_FLASH_ATTR parseTrackInfo(const char *json, int jsonLen, TrackInfo *t
 	}
 	minDepth = 0;
 	if (track->artists.count < 1)
+		return ERROR;
+
+	if (!getNextInt(&state, 2, "duration_ms", &track->duration))
 		return ERROR;
 
 	if ((track->name.length = getNextStringAllocUtf8(&state, 2, "name", &track->name.str)) == 0)

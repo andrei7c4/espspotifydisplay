@@ -135,6 +135,7 @@ int ICACHE_FLASH_ATTR strToWstr(const char *str, int strLen, ushort **wstr)
 		str++;
 		strLen--;
 	}
+	*pwstr = 0;
 	return length;
 }
 

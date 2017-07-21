@@ -417,7 +417,7 @@ LOCAL void ICACHE_FLASH_ATTR onTcpDataRecv(void *arg, char *pusrdata, unsigned s
 		if (httpRxMsgCurLen < (HTTP_RX_BUF_SIZE-1))
 		{			
 			os_timer_setfn(&httpRxTmr, (os_timer_func_t*)params->parserFunc, NULL);
-			os_timer_arm(&httpRxTmr, 1000, 0);
+			os_timer_arm(&httpRxTmr, 100, 0);
 		}
 		else
 		{
@@ -639,6 +639,42 @@ LOCAL void ICACHE_FLASH_ATTR parseApiReply(void)
 			}
 
 			// TODO: draw track progress
+			dispSetActiveMemBuf(MainMemBuf);
+			dispClearMem(50, 14);
+
+			int progress = track.progress / 1000;
+			int minutes = progress / 60;
+			int seconds = progress % 60;
+			char timeStr[7];
+			int len = ets_snprintf(timeStr, sizeof(timeStr), "%d:%02d", minutes, seconds);
+			drawStr_Latin(&arial13, 0, 50, timeStr, len);
+
+			int duration = track.duration / 1000;
+			minutes = duration / 60;
+			seconds = duration % 60;
+			len = ets_snprintf(timeStr, sizeof(timeStr), "%d:%02d", minutes, seconds);
+			int timeStrWidth = drawStrAlignRight_Latin(&arial13, DISP_WIDTH-1, 50, timeStr, len);
+
+			int barX = timeStrWidth + 7;
+			int barMaxWidth = DISP_WIDTH - (barX*2);
+			float progressPercent = ((float)track.progress) / track.duration;
+			int barWidth = progressPercent * barMaxWidth + 0.5;
+			if (barWidth > 0)
+			{
+				int barHeight = 4;
+				int barY = 57;
+				int barX2 = barX+barWidth-1;
+				int barY2 = barY+barHeight-1;
+				drawRect(barX, barY, barX2, barY2, 1);
+				drawPixel(barX, barY, 0);
+				drawPixel(barX, barY2, 0);
+				drawPixel(barX2, barY, 0);
+				drawPixel(barX2, barY2, 0);
+			}
+
+
+			dispUpdate(50, 14);
+
 
 			trackInfoFree(&curTrack);
 			curTrack = track;

@@ -537,6 +537,7 @@ int ICACHE_FLASH_ATTR drawStr(const Font *font, int x, int y, const ushort *str,
     return strWidth;
 }
 
+
 int ICACHE_FLASH_ATTR drawStr_Latin(const Font *font, int x, int y, const char *str, int length)
 {
 	ushort *strbuf = NULL;
@@ -549,6 +550,24 @@ int ICACHE_FLASH_ATTR drawStr_Latin(const Font *font, int x, int y, const char *
 	if (strLen && strbuf)
 	{
 		width = drawStr(font, x, y, strbuf, strLen);
+	}
+	os_free(strbuf);
+	return width;
+}
+
+int ICACHE_FLASH_ATTR drawStrAlignRight_Latin(const Font *font, int right, int y, const char *str, int length)
+{
+	ushort *strbuf = NULL;
+	int width = 0;
+	if (length < 0)
+	{
+		length = os_strlen(str);
+	}
+	int strLen = strToWstr(str, length, &strbuf);
+	if (strLen && strbuf)
+	{
+		width = strWidth(font, strbuf);
+		width = drawStr(font, right-width, y, strbuf, strLen);
 	}
 	os_free(strbuf);
 	return width;
@@ -709,15 +728,14 @@ LOCAL int strLength(const ushort *str)
 
 LOCAL int ICACHE_FLASH_ATTR strWidth(const Font *font, const ushort *str)
 {
-	int strWidth = 0;
+	int width = 0;
     while (*str)
     {
         ushort ch = *str;
-        int chWidth = charWidth(font, ch);
-        strWidth += chWidth;
+        width += charWidth(font, ch);
         str++;
     }
-    return strWidth;
+    return width;
 }
 
 LOCAL int ICACHE_FLASH_ATTR strWidthLenLim(const Font *font, const ushort *str, int length)

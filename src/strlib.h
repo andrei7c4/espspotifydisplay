@@ -36,6 +36,7 @@ void strListClear(StrList *list);
 int drawChar(const Font *font, int x, int y, ushort ch);
 int drawStr(const Font *font, int x, int y, const ushort *str, int length);
 int drawStr_Latin(const Font *font, int x, int y, const char *str, int length);
+int drawStrAlignRight_Latin(const Font *font, int right, int y, const char *str, int length);
 int drawStrHighlight_Latin(const Font *font, int x, int y, const char *str);
 void drawStrWidthLim(const Font *font, int x, int y, const ushort *str, int width);
 
