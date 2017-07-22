@@ -2,11 +2,11 @@
 #include <osapi.h>
 #include <user_interface.h>
 #include <spi_flash.h>
+#include <limits.h>
 #include "config.h"
 
 extern void initAuthBasicStr(void);
 extern void connectToAuthHost(void);
-extern void connectToApiHost(void);
 
 
 Config config;
@@ -23,6 +23,8 @@ void ICACHE_FLASH_ATTR configInit(Config *config)
 
 	config->access_token[0] = '\0';
 	config->refresh_token[0] = '\0';
+
+	config->pollInterval = 10;
 
 	config->tokenExpireTs = 0;
 
@@ -92,6 +94,19 @@ LOCAL int ICACHE_FLASH_ATTR setBoolParam(int *param, const char *value, uint val
 	}
 }
 
+LOCAL int ICACHE_FLASH_ATTR setIntParam(int *param, int min, int max, const char *value, uint valueLen)
+{
+	if (!value || !*value || !valueLen)
+		return ERROR;
+
+	int intVal = strtoint(value);
+	if (intVal < min || intVal > max)
+		return ERROR;
+
+	*param = intVal;
+	return OK;
+}
+
 
 LOCAL int ICACHE_FLASH_ATTR setSsid(const char *value, uint valueLen)
 {
@@ -149,6 +164,11 @@ LOCAL int ICACHE_FLASH_ATTR setClientSecret(const char *value, uint valueLen)
 //	return OK;
 //}
 
+LOCAL int ICACHE_FLASH_ATTR setPollInterval(const char *value, uint valueLen)
+{
+	return setIntParam(&config.pollInterval, 1, INT_MAX, value, valueLen);
+}
+
 LOCAL int ICACHE_FLASH_ATTR setDispScroll(const char *value, uint valueLen)
 {
 	return setBoolParam(&config.dispScrollEn, value, valueLen);
@@ -177,6 +197,7 @@ CmdEntry commands[] = {
 	{"client_id", setClientId},
 	{"client_secret", setClientSecret},
 	//{"auth_code", setAuthCode},
+	{"poll", setPollInterval},
 	{"disp_scroll", setDispScroll},
 	{"title_scroll", setTitleScroll},
 	{"debug", setDebug},

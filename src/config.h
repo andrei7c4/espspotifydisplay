@@ -28,6 +28,8 @@ typedef struct{
 
 	uint tokenExpireTs;
 
+	int pollInterval;
+
 	int dispScrollEn;
 	int titleScrollEn;
     

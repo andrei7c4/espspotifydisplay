@@ -26,8 +26,7 @@
 
 char authBasicStr[100] = "";
 
-#define DEFAULT_AUTH_CODE		""
-char auth_code[400];	// TODO:
+char auth_code[400] = "";
 
 TrackInfo curTrack = {{0,0},{0,0},0,0,0};
 
@@ -102,7 +101,9 @@ typedef enum{
 	stateInit,
 	stateConnectToAp,
     stateConnectToHost,
-    stateConnected
+    stateConnected,
+	stateRequestSent,
+	stateReplyReceived
 }AppState;
 AppState appState = stateInit;
 
@@ -167,7 +168,6 @@ void user_init(void)
 //configWrite(&config);
 	configRead(&config);
 
-	os_strcpy(auth_code, DEFAULT_AUTH_CODE);
 	initAuthBasicStr();
 	
 	curTrack.name.str = (ushort*)os_malloc(sizeof(ushort));
@@ -453,8 +453,15 @@ LOCAL void ICACHE_FLASH_ATTR onTcpDisconnected(void *arg)
 			return;
 		}
 
-		// onTcpReconnCb was not called -> try to reconnect
-		if (params != &apiConnParams)	// but only to API host
+		// reconnect automatically to API host only
+		if (params != &apiConnParams)
+		{
+			return;
+		}
+
+		// server probably closed connection due to inactivity
+		// no need to reconnect immediately, will reconnect from pollCurTrackTmrCb
+		if (appState == stateReplyReceived)
 		{
 			return;
 		}
@@ -579,16 +586,19 @@ LOCAL void ICACHE_FLASH_ATTR progressTmrCb(void)
 LOCAL void ICACHE_FLASH_ATTR requestTokens(void)
 {
     spotifyRequestTokens(authConnParams.host, auth_code);
+    setAppState(stateRequestSent);
 }
 
 LOCAL void ICACHE_FLASH_ATTR refreshTokens(void)
 {
 	spotifyRefreshTokens(authConnParams.host, config.refresh_token);
+	setAppState(stateRequestSent);
 }
 
 LOCAL void ICACHE_FLASH_ATTR getCurrentlyPlaying(void)
 {
     spotifyGetCurrentlyPlaying(apiConnParams.host);
+    setAppState(stateRequestSent);
 
     // if no answer, retry after 5s
     os_timer_arm(&pollCurTrackTmr, 5000, 0);
@@ -603,6 +613,8 @@ LOCAL void ICACHE_FLASH_ATTR parseAuthReply(void)
 	httpMsgRxBuf[httpRxMsgCurLen] = '\0';
 	//debug("%s\n", httpMsgRxBuf);
     
+	setAppState(stateReplyReceived);
+
 	char *json = (char*)os_strstr(httpMsgRxBuf, "{\"");
 	if (!json)
 	{
@@ -642,6 +654,8 @@ LOCAL void ICACHE_FLASH_ATTR parseApiReply(void)
 	debug("parseApiReply, len %d\n", httpRxMsgCurLen);
 	httpMsgRxBuf[httpRxMsgCurLen] = '\0';
 	//debug("%s\n", httpMsgRxBuf);
+
+	setAppState(stateReplyReceived);
 
 	char *json = (char*)os_strstr(httpMsgRxBuf, "{");
 	if (!json)
@@ -709,7 +723,19 @@ LOCAL void ICACHE_FLASH_ATTR parseApiReply(void)
 		}
 
 		os_timer_disarm(&pollCurTrackTmr);
-		os_timer_arm(&pollCurTrackTmr, 10000, 0);
+		int nextPoll;
+		if (curTrack.isPlaying)
+		{
+			// at the end of track, send next poll when track changes
+			int timeLeft = curTrack.duration - curTrack.progress;
+			nextPoll = MIN(timeLeft+1, config.pollInterval);
+		}
+		else
+		{
+			nextPoll = config.pollInterval;
+		}
+		debug("nextPoll after %d s\n", nextPoll);
+		os_timer_arm(&pollCurTrackTmr, nextPoll*1000, 0);
 		debug("heap: %u\n", system_get_free_heap_size());
 	}
 
