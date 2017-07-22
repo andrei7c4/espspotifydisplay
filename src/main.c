@@ -292,8 +292,9 @@ LOCAL void ICACHE_FLASH_ATTR connectToHost(ConnParams *params)
     setAppState(stateConnectToHost);
         
 	espConn.reverse = params;
-	if (espConn.state == ESPCONN_CONNECT)		// if we are currently connected to some host -> disconnect
-	{											// and try to connect when disconnection occurs
+	if (espConn.state == ESPCONN_CONNECT || 	// if we are currently connected to some host -> disconnect
+		espConn.state == ESPCONN_READ)			// and try to connect when disconnection occurs
+	{
 		disconnExpected = TRUE;
 		// disconnect should not be called directly from here
 		os_timer_setfn(&gpTmr, (os_timer_func_t*)espconn_secure_disconnect, &espConn);
@@ -501,7 +502,7 @@ LOCAL void ICACHE_FLASH_ATTR reconnect(void)
 
 
 
-LOCAL void pollCurTrackTmrCb(void)
+LOCAL void ICACHE_FLASH_ATTR pollCurTrackTmrCb(void)
 {
 	uint ts = sntp_get_current_timestamp();
 	if ((ts+5) > config.tokenExpireTs)
@@ -511,11 +512,12 @@ LOCAL void pollCurTrackTmrCb(void)
 	}
 	else
 	{
+		// only ESPCONN_CONNECT state is good for sending data
 		if (espConn.state == ESPCONN_CONNECT && espConn.reverse == &apiConnParams)
 		{
 			getCurrentlyPlaying();
 		}
-		else
+		else	// in all other cases we need to reconnect
 		{
 			apiConnParams.requestFunc = getCurrentlyPlaying;
 			connectToHost(&apiConnParams);
@@ -587,6 +589,9 @@ LOCAL void ICACHE_FLASH_ATTR refreshTokens(void)
 LOCAL void ICACHE_FLASH_ATTR getCurrentlyPlaying(void)
 {
     spotifyGetCurrentlyPlaying(apiConnParams.host);
+
+    // if no answer, retry after 5s
+    os_timer_arm(&pollCurTrackTmr, 5000, 0);
 }
 
 
@@ -703,6 +708,7 @@ LOCAL void ICACHE_FLASH_ATTR parseApiReply(void)
 			trackInfoFree(&track);
 		}
 
+		os_timer_disarm(&pollCurTrackTmr);
 		os_timer_arm(&pollCurTrackTmr, 10000, 0);
 		debug("heap: %u\n", system_get_free_heap_size());
 	}
