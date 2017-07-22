@@ -23,7 +23,8 @@ struct ParamList
 
 typedef enum{
 	httpGET,
-	httpPOST
+	httpPOST,
+	httpPUT
 }HttpMethod;
 
 typedef enum{
@@ -31,11 +32,18 @@ typedef enum{
 	authBearer
 }AuthType;
 
+typedef enum{
+	cmdPlay,
+	cmdPause,
+	cmdNext
+}PlayerCmd;
+
 
 int base64encode(const char *src, int srcLen, char *dst, int dstSize);
 
 int spotifyRequestTokens(const char *host, const char *code);
 int spotifyRefreshTokens(const char *host, const char *refreshToken);
 int spotifyGetCurrentlyPlaying(const char *host);
+int spotifySendPlayerCmd(const char *host, PlayerCmd cmd);
 
 #endif /* SRC_HTTPREQ_H_ */

@@ -58,7 +58,10 @@ LOCAL struct _esp_tcp espConnTcp = {0};
 
 LOCAL void requestTokens(void);
 LOCAL void refreshTokens(void);
+LOCAL void sendApiRequest(void (*requestFunc)(void));
 LOCAL void getCurrentlyPlaying(void);
+LOCAL void sendPlayPauseCmd(void);
+LOCAL void sendNextTrackCmd(void);
 LOCAL void parseApiReply(void);
 LOCAL void parseAuthReply(void);
 
@@ -511,25 +514,7 @@ LOCAL void ICACHE_FLASH_ATTR reconnect(void)
 
 LOCAL void ICACHE_FLASH_ATTR pollCurTrackTmrCb(void)
 {
-	uint ts = sntp_get_current_timestamp();
-	if ((ts+5) > config.tokenExpireTs)
-	{
-		authConnParams.requestFunc = refreshTokens;
-		connectToHost(&authConnParams);
-	}
-	else
-	{
-		// only ESPCONN_CONNECT state is good for sending data
-		if (espConn.state == ESPCONN_CONNECT && espConn.reverse == &apiConnParams)
-		{
-			getCurrentlyPlaying();
-		}
-		else	// in all other cases we need to reconnect
-		{
-			apiConnParams.requestFunc = getCurrentlyPlaying;
-			connectToHost(&apiConnParams);
-		}
-	}
+	sendApiRequest(getCurrentlyPlaying);
 }
 
 
@@ -585,23 +570,80 @@ LOCAL void ICACHE_FLASH_ATTR progressTmrCb(void)
 
 LOCAL void ICACHE_FLASH_ATTR requestTokens(void)
 {
-    spotifyRequestTokens(authConnParams.host, auth_code);
-    setAppState(stateRequestSent);
+    if (spotifyRequestTokens(authConnParams.host, auth_code) == OK)
+    {
+        setAppState(stateRequestSent);
+    }
 }
 
 LOCAL void ICACHE_FLASH_ATTR refreshTokens(void)
 {
-	spotifyRefreshTokens(authConnParams.host, config.refresh_token);
-	setAppState(stateRequestSent);
+	if (spotifyRefreshTokens(authConnParams.host, config.refresh_token) == OK)
+	{
+		setAppState(stateRequestSent);
+	}
 }
 
+LOCAL void ICACHE_FLASH_ATTR sendApiRequest(void (*requestFunc)(void))
+{
+	apiConnParams.requestFunc = requestFunc;
+	uint ts = sntp_get_current_timestamp();
+	if ((ts+5) > config.tokenExpireTs)
+	{
+		authConnParams.requestFunc = refreshTokens;
+		connectToHost(&authConnParams);
+	}
+	else
+	{
+		// only ESPCONN_CONNECT state is good for sending data
+		if (espConn.state == ESPCONN_CONNECT && espConn.reverse == &apiConnParams)
+		{
+			requestFunc();
+		}
+		else	// in all other cases we need to reconnect
+		{
+			connectToHost(&apiConnParams);
+		}
+	}
+}
+
+// call this function through sendApiRequest
 LOCAL void ICACHE_FLASH_ATTR getCurrentlyPlaying(void)
 {
-    spotifyGetCurrentlyPlaying(apiConnParams.host);
-    setAppState(stateRequestSent);
+    if (spotifyGetCurrentlyPlaying(apiConnParams.host) == OK)
+    {
+        setAppState(stateRequestSent);
+    }
 
     // if no answer, retry after 5s
     os_timer_arm(&pollCurTrackTmr, 5000, 0);
+}
+
+// call this function through sendApiRequest
+LOCAL void ICACHE_FLASH_ATTR sendPlayPauseCmd(void)
+{
+	int rv;
+	if (curTrack.isPlaying)
+	{
+		rv = spotifySendPlayerCmd(apiConnParams.host, cmdPause);
+	}
+	else
+	{
+		rv = spotifySendPlayerCmd(apiConnParams.host, cmdPlay);
+	}
+	if (rv == OK)
+	{
+		setAppState(stateRequestSent);
+	}
+}
+
+// call this function through sendApiRequest
+LOCAL void ICACHE_FLASH_ATTR sendNextTrackCmd(void)
+{
+	if (spotifySendPlayerCmd(apiConnParams.host, cmdNext))
+	{
+		setAppState(stateRequestSent);
+	}
 }
 
 
@@ -609,23 +651,23 @@ LOCAL void ICACHE_FLASH_ATTR getCurrentlyPlaying(void)
 
 LOCAL void ICACHE_FLASH_ATTR parseAuthReply(void)
 {
+	setAppState(stateReplyReceived);
+
 	debug("parseAuthReply, len %d\n", httpRxMsgCurLen);
 	httpMsgRxBuf[httpRxMsgCurLen] = '\0';
 	//debug("%s\n", httpMsgRxBuf);
-    
-	setAppState(stateReplyReceived);
-
-	char *json = (char*)os_strstr(httpMsgRxBuf, "{\"");
-	if (!json)
-	{
-		return;
-	}
-	int jsonLen = httpRxMsgCurLen - (json - httpMsgRxBuf);
-	//debug("jsonLen %d\n", jsonLen);
 
 	if (authConnParams.requestFunc == requestTokens ||
 		authConnParams.requestFunc == refreshTokens)
 	{
+		char *json = (char*)os_strstr(httpMsgRxBuf, "{\"");
+		if (!json)
+		{
+			return;
+		}
+		int jsonLen = httpRxMsgCurLen - (json - httpMsgRxBuf);
+		//debug("jsonLen %d\n", jsonLen);
+
 		int expiresIn;
 		if (parseTokens(json, jsonLen,
 				config.access_token, sizeof(config.access_token),
@@ -639,34 +681,31 @@ LOCAL void ICACHE_FLASH_ATTR parseAuthReply(void)
 		config.tokenExpireTs = ts + expiresIn;
 		configWrite(&config);
 
-		apiConnParams.requestFunc = getCurrentlyPlaying;
 		connectToHost(&apiConnParams);
 	}
 	
 	httpRxMsgCurLen = 0;
 }
 
-
-
-
 LOCAL void ICACHE_FLASH_ATTR parseApiReply(void)
 {
+	setAppState(stateReplyReceived);
+
 	debug("parseApiReply, len %d\n", httpRxMsgCurLen);
 	httpMsgRxBuf[httpRxMsgCurLen] = '\0';
 	//debug("%s\n", httpMsgRxBuf);
 
-	setAppState(stateReplyReceived);
-
-	char *json = (char*)os_strstr(httpMsgRxBuf, "{");
-	if (!json)
-	{
-		return;
-	}
-	int jsonLen = httpRxMsgCurLen - (json - httpMsgRxBuf);
-	//debug("jsonLen %d\n", jsonLen);
-
 	if (apiConnParams.requestFunc == getCurrentlyPlaying)
 	{
+		char *json = (char*)os_strstr(httpMsgRxBuf, "{");
+		if (!json)
+		{
+			httpRxMsgCurLen = 0;
+			return;
+		}
+		int jsonLen = httpRxMsgCurLen - (json - httpMsgRxBuf);
+		//debug("jsonLen %d\n", jsonLen);
+
 		TrackInfo track;
 		os_memset(&track, 0, sizeof(TrackInfo));
 		if (parseTrackInfo(json, jsonLen, &track) == OK)
@@ -738,6 +777,17 @@ LOCAL void ICACHE_FLASH_ATTR parseApiReply(void)
 		os_timer_arm(&pollCurTrackTmr, nextPoll*1000, 0);
 		debug("heap: %u\n", system_get_free_heap_size());
 	}
+	else if (apiConnParams.requestFunc == sendPlayPauseCmd ||
+			 apiConnParams.requestFunc == sendNextTrackCmd)
+	{
+		char *ok = (char*)os_strstr(httpMsgRxBuf, "HTTP/1.1 204");
+		if (ok)
+		{
+			// command succeeded -> poll currently playing
+			os_timer_disarm(&pollCurTrackTmr);
+			os_timer_arm(&pollCurTrackTmr, 100, 0);
+		}
+	}
 
 	httpRxMsgCurLen = 0;
 }
@@ -769,9 +819,14 @@ LOCAL void ICACHE_FLASH_ATTR buttonsScanTmrCb(void)
 		prevButtons = buttons;
 		if (buttons != NotPressed)
 		{
-			if (displayState == stateOn)
+			switch (buttons)
 			{
-
+			case Button1:
+				sendApiRequest(sendPlayPauseCmd);
+				break;
+			case Button2:
+				sendApiRequest(sendNextTrackCmd);
+				break;
 			}
 			wakeupDisplay();
 		}

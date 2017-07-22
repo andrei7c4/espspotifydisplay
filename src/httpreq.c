@@ -15,6 +15,9 @@
 
 LOCAL const char *spotifyTokenEndpoint = "/api/token";
 LOCAL const char *spotifyCurrentlyPlayingEndpoint = "/v1/me/player/currently-playing";
+LOCAL const char *spotifyPlayerPlayEndpoint = "/v1/me/player/play";
+LOCAL const char *spotifyPlayerPauseEndpoint = "/v1/me/player/pause";
+LOCAL const char *spotifyPlayerNextEndpoint = "/v1/me/player/next";
 
 #define HTTP_REQ_MAX_LEN	1024
 LOCAL char httpReqBuf[HTTP_REQ_MAX_LEN];
@@ -276,6 +279,9 @@ LOCAL int ICACHE_FLASH_ATTR formHttpRequest(char *dst, int dstSize,
 	case httpPOST:
 		method = "POST";
 		break;
+	case httpPUT:
+		method = "PUT";
+		break;
 	default: goto out;
 	}
 
@@ -427,5 +433,46 @@ int ICACHE_FLASH_ATTR spotifyGetCurrentlyPlaying(const char *host)
     return rv;
 }
 
+int ICACHE_FLASH_ATTR spotifySendPlayerCmd(const char *host, PlayerCmd cmd)
+{
+	int rv = ERROR;
+	ParamList params;
+	os_memset(&params, 0, sizeof(ParamList));
+	HttpMethod method;
+	const char *endPoint = NULL;
+	switch (cmd)
+	{
+	case cmdPlay:
+		method = httpPUT;
+		endPoint = spotifyPlayerPlayEndpoint;
+		break;
+	case cmdPause:
+		method = httpPUT;
+		endPoint = spotifyPlayerPauseEndpoint;
+		break;
+	case cmdNext:
+		method = httpPOST;
+		endPoint = spotifyPlayerNextEndpoint;
+		break;
+	}
+	if (endPoint)
+	{
+		int requestLen = formHttpRequest(httpReqBuf, HTTP_REQ_MAX_LEN,
+				method, host, endPoint, &params, authBearer);
+		if (requestLen > 0)
+		{
+			if (espconn_secure_send(&espConn, (uint8*)httpReqBuf, requestLen) == OK)
+			{
+				rv = OK;
+			}
+		}
+		else
+		{
+			debug("spotifySendPlayerCmd formHttpRequest failed\n");
+		}
+	}
+	paramListClear(&params);
+    return rv;
+}
 
 
