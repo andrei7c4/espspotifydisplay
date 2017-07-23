@@ -34,18 +34,17 @@ typedef enum{
 
 void dispSetActiveMemBuf(MemBufType memBuf);
 
-void dispFillMem(uchar data, int row, int height);
-void dispClearMem(int row, int height);
-void dispClearMemAll(void);
+void dispMemFill(uchar data, int row, int height);
+void dispMemClearAll(void);
+void dispMemClearTitle(void);
+void dispMemClearArtist(void);
+void dispMemClearProgBar(void);
 
-void dispCopySecMemBufToMain(void);
+void titleScrollInit(void);
+void artistScrollInit(void);
 
-
-void initTitleScroll(void);
-void initArtistScroll(void);
-
-int dispTitleScrollStep(void);
-int dispArtistScrollStep(void);
+int titleScrollStep(void);
+int artistScrollStep(void);
 
 
 void drawImage(int x, int y, const uint *image);

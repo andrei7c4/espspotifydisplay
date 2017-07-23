@@ -164,7 +164,7 @@ void user_init(void)
 	uart_init(BIT_RATE_921600, BIT_RATE_921600);
 
 	dispSetActiveMemBuf(MainMemBuf);
-	dispClearMem(0, DISP_HEIGHT);
+	dispMemClearAll();
 
 //configInit(&config);
 //configWrite(&config);
@@ -514,7 +514,7 @@ LOCAL void ICACHE_FLASH_ATTR pollCurTrackTmrCb(void)
 LOCAL void ICACHE_FLASH_ATTR updateTrackProgress(int progress, int duration)
 {
 	dispSetActiveMemBuf(MainMemBuf);
-	dispClearMem(BLANK_SPACE_OFFSET, BLANK_SPACE_HEIGHT+PROGBAR_HEIGHT);
+	dispMemClearProgBar();
 
 	char timeStr[7];
 	int minutes = progress / 60;
@@ -546,7 +546,7 @@ LOCAL void ICACHE_FLASH_ATTR updateTrackProgress(int progress, int duration)
 		drawRect(barX, barY, barX2, barY2, 1);
 	}
 
-	dispUpdate(BLANK_SPACE_OFFSET, BLANK_SPACE_HEIGHT+PROGBAR_HEIGHT);
+	dispUpdateProgBar();
 }
 
 LOCAL void ICACHE_FLASH_ATTR progressTmrCb(void)
@@ -708,29 +708,50 @@ LOCAL void ICACHE_FLASH_ATTR parseApiReply(void)
 			if (wstrcmp(curTrack.name.str, track.name.str))
 			{
 				debug("new track\n");
-				dispSetActiveMemBuf(TitleMemBuf);
-				dispClearMemAll();
+				void (*dispUpdateFunc)(void);
+				if (config.scrollEn)
+				{
+					dispUpdateFunc = scrollTitle;
+					dispSetActiveMemBuf(TitleMemBuf);
+					dispMemClearAll();
+				}
+				else
+				{
+					dispUpdateFunc = dispUpdateTitle;
+					dispSetActiveMemBuf(MainMemBuf);
+					dispMemClearTitle();
+				}
 				drawStr(&arial13b, 0, 0, track.name.str, track.name.length);
 
 				if (!strListEqual(&curTrack.artists, &track.artists))
 				{
 					debug("new artist\n");
-					dispSetActiveMemBuf(ArtistMemBuf);
-					dispClearMemAll();
-
+					int textPos;
+					if (config.scrollEn)
+					{
+						dispUpdateFunc = scrollTitleArtist;
+						dispSetActiveMemBuf(ArtistMemBuf);
+						dispMemClearAll();
+						textPos = 0;
+					}
+					else
+					{
+						dispUpdateFunc = dispUpdateTitleArtist;
+						dispSetActiveMemBuf(MainMemBuf);
+						dispMemClearArtist();
+						textPos = ARTIST_OFFSET;
+					}
 					StrBuf separator;
 					ushort sepStr[] = {',', ' ', '\0'};
 					separator.str = sepStr;
 					separator.length = NELEMENTS(sepStr)-1;
-					strListDraw(&arial13, 0, 0, &track.artists, &separator);
-					scrollTitleArtist();
+					strListDraw(&arial13, 0, textPos, &track.artists, &separator);
 				}
 				else
 				{
 					debug("same artist\n");
-					scrollTitle();
 				}
-
+				dispUpdateFunc();
 				wakeupDisplay();
 			}
 			else

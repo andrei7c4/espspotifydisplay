@@ -47,7 +47,7 @@ void ICACHE_FLASH_ATTR dispSetActiveMemBuf(MemBufType memBuf)
 	}
 }
 
-void ICACHE_FLASH_ATTR dispFillMem(uchar data, int row, int height)
+void ICACHE_FLASH_ATTR dispMemFill(uchar data, int row, int height)
 {
     for (; row < memHeight && height > 0; row++, height--)
     {
@@ -55,23 +55,29 @@ void ICACHE_FLASH_ATTR dispFillMem(uchar data, int row, int height)
     }
 }
 
-void ICACHE_FLASH_ATTR dispClearMem(int row, int height)
+LOCAL void ICACHE_FLASH_ATTR dispMemClear(int row, int height)
 {
-	dispFillMem(0, row, height);
+	dispMemFill(0, row, height);
 }
 
-void ICACHE_FLASH_ATTR dispClearMemAll(void)
+void ICACHE_FLASH_ATTR dispMemClearAll(void)
 {
-	dispFillMem(0, 0, memHeight);
+	dispMemClear(0, memHeight);
 }
 
-void ICACHE_FLASH_ATTR dispCopySecMemBufToMain(void)
+void ICACHE_FLASH_ATTR dispMemClearTitle(void)
 {
-	int i;
-	for (i = 0; i < TITLE_HEIGHT; i++)
-	{
-		os_memcpy(mem1[i], mem2[i], DISP_MEMWIDTH);
-	}
+	dispMemClear(TITLE_OFFSET, TITLE_HEIGHT);
+}
+
+void ICACHE_FLASH_ATTR dispMemClearArtist(void)
+{
+	dispMemClear(ARTIST_OFFSET, ARTIST_HEIGHT);
+}
+
+void ICACHE_FLASH_ATTR dispMemClearProgBar(void)
+{
+	dispMemClear(BLANK_SPACE_OFFSET, BLANK_SPACE_HEIGHT+PROGBAR_HEIGHT);
 }
 
 
@@ -85,12 +91,12 @@ typedef struct
 Scroll titleScroll = {TITLE_OFFSET, TITLE_HEIGHT, 0, mem2};
 Scroll artistScroll = {ARTIST_OFFSET, ARTIST_HEIGHT, 0, mem3};
 
-void ICACHE_FLASH_ATTR initTitleScroll(void)
+void ICACHE_FLASH_ATTR titleScrollInit(void)
 {
 	titleScroll.y2 = 0;
 }
 
-void ICACHE_FLASH_ATTR initArtistScroll(void)
+void ICACHE_FLASH_ATTR artistScrollInit(void)
 {
 	artistScroll.y2 = 0;
 }
@@ -114,12 +120,12 @@ LOCAL int ICACHE_FLASH_ATTR dispScrollStep(Scroll *scroll)
 	return FALSE;
 }
 
-int ICACHE_FLASH_ATTR dispTitleScrollStep(void)
+int ICACHE_FLASH_ATTR titleScrollStep(void)
 {
 	return dispScrollStep(&titleScroll);
 }
 
-int ICACHE_FLASH_ATTR dispArtistScrollStep(void)
+int ICACHE_FLASH_ATTR artistScrollStep(void)
 {
 	return dispScrollStep(&artistScroll);
 }

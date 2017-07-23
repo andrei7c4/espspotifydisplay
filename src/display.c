@@ -19,20 +19,24 @@ void ICACHE_FLASH_ATTR dispUpdateFull(void)
 	dispUpdate(0, DISP_HEIGHT);
 }
 
-LOCAL void ICACHE_FLASH_ATTR dispUpdateTitle(void)
+void ICACHE_FLASH_ATTR dispUpdateTitle(void)
 {
 	dispUpdate(0, TITLE_HEIGHT);
 }
 
-LOCAL void ICACHE_FLASH_ATTR dispUpdateTitleArtist(void)
+void ICACHE_FLASH_ATTR dispUpdateTitleArtist(void)
 {
 	dispUpdate(0, ARTIST_OFFSET+ARTIST_HEIGHT);
+}
+
+void ICACHE_FLASH_ATTR dispUpdateProgBar(void)
+{
+	dispUpdate(BLANK_SPACE_OFFSET, BLANK_SPACE_HEIGHT+PROGBAR_HEIGHT);
 }
 
 
 DispState displayState = stateOff;
 Orientation dispOrient = orient0deg;
-int dispScrollCurLine = 0;
 
 
 os_timer_t scrollTmr;
@@ -51,7 +55,7 @@ LOCAL void ICACHE_FLASH_ATTR horizontalSqueezeTmrCb(void)
 	{
 		drawPixelNormal(squeezeColumn, 0, 0);
 		drawPixelNormal(255-squeezeColumn, 0, 0);
-		SSD1322_cpyMemBuf(pMem, 0, dispScrollCurLine+squeezeRow, 1);
+		SSD1322_cpyMemBuf(pMem, 0, squeezeRow, 1);
 		squeezeColumn++;
 	}
 	else
@@ -67,7 +71,7 @@ LOCAL void ICACHE_FLASH_ATTR horizontalSqueezeTmrCb(void)
 		}
 
 		dispSetActiveMemBuf(MainMemBuf);
-		SSD1322_cpyMemBuf(pMem, squeezeRow, dispScrollCurLine+squeezeRow, 1);	// restore middle row
+		SSD1322_cpyMemBuf(pMem, squeezeRow, squeezeRow, 1);	// restore middle row
 	}
 }
 
@@ -75,7 +79,7 @@ LOCAL void ICACHE_FLASH_ATTR horizontalSqueezeTmrCb(void)
 
 LOCAL void ICACHE_FLASH_ATTR titleScrollTmrCb(void)
 {
-	if (dispTitleScrollStep())
+	if (titleScrollStep())
 	{
 		os_timer_disarm(&scrollTmr);
 	}
@@ -84,7 +88,7 @@ LOCAL void ICACHE_FLASH_ATTR titleScrollTmrCb(void)
 
 void ICACHE_FLASH_ATTR scrollTitle(void)
 {
-	initTitleScroll();
+	titleScrollInit();
 	os_timer_disarm(&scrollTmr);
 	os_timer_setfn(&scrollTmr, (os_timer_func_t *)titleScrollTmrCb, NULL);
 	os_timer_arm(&scrollTmr, TITLE_SCROLL_INTERVAL, 1);
@@ -93,7 +97,7 @@ void ICACHE_FLASH_ATTR scrollTitle(void)
 
 LOCAL void ICACHE_FLASH_ATTR titleArtistScrollTmrCb(void)
 {
-	if (dispTitleScrollStep() & dispArtistScrollStep())
+	if (titleScrollStep() & artistScrollStep())
 	{
 		os_timer_disarm(&scrollTmr);
 	}
@@ -102,8 +106,8 @@ LOCAL void ICACHE_FLASH_ATTR titleArtistScrollTmrCb(void)
 
 void ICACHE_FLASH_ATTR scrollTitleArtist(void)
 {
-	initTitleScroll();
-	initArtistScroll();
+	titleScrollInit();
+	artistScrollInit();
 	os_timer_disarm(&scrollTmr);
 	os_timer_setfn(&scrollTmr, (os_timer_func_t *)titleArtistScrollTmrCb, NULL);
 	os_timer_arm(&scrollTmr, TITLE_SCROLL_INTERVAL, 1);
@@ -115,14 +119,14 @@ void ICACHE_FLASH_ATTR scrollTitleArtist(void)
 LOCAL void ICACHE_FLASH_ATTR horizontalSqueezeStart(void)
 {
 	dispSetActiveMemBuf(TempMemBuf);
-	dispFillMem(0, 0, 1);
+	dispMemFill(0, 0, 1);
 	squeezeColumn = 30;
 	int x;
 	for (x = squeezeColumn; x < DISP_WIDTH-squeezeColumn; x++)
 	{
 		drawPixelNormal(x, 0, 1);
 	}
-	SSD1322_cpyMemBuf(pMem, 0, dispScrollCurLine+squeezeRow, 1);
+	SSD1322_cpyMemBuf(pMem, 0, squeezeRow, 1);
 
 	os_timer_disarm(&dimmingTmr);
 	os_timer_setfn(&dimmingTmr, (os_timer_func_t *)horizontalSqueezeTmrCb, NULL);
@@ -204,51 +208,9 @@ void ICACHE_FLASH_ATTR dispUndimmStart(void)
 	}
 }
 
-//
-//extern void displayScrollDone(void);
-//// exponential easing in (approx. 0.5s): pow(2, 10*(((curLine-1)/62)-1))*40+1
-//LOCAL const uchar scrollIntervals[63] = {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,3,3,3,3,3,4,4,4,5,5,6,6,7,8,8,9,10,11,13,14,16,17,19,21,24,27,30,33,37,41};
-//LOCAL void ICACHE_FLASH_ATTR displayScrollTmrCb(void)
-//{
-//	dispScrollCurLine++;
-//	dispScrollCurLine &= 0x7F;
-//	SSD1322_setStartLine(dispScrollCurLine);
-//	if (dispScrollCurLine == 0 || dispScrollCurLine == 64)
-//	{
-//		displayScrollDone();
-//	}
-//	else
-//	{
-//		int line = dispScrollCurLine >= 65 ? dispScrollCurLine-65 : dispScrollCurLine-1;
-//		os_timer_arm(&scrollTmr, scrollIntervals[line], 0);
-//	}
-//}
-//
-//void ICACHE_FLASH_ATTR scrollDisplay(void)
-//{
-//	os_timer_disarm(&scrollTmr);
-//
-//	if (dispScrollCurLine == 0 || dispScrollCurLine == 64)
-//	{
-//		dispUpdate(dispScrollCurLine == 0 ? Page1 : Page0);
-//	}
-//	else	// interrupted scroll
-//	{
-//		dispUpdate(dispScrollCurLine < 64 ? Page1 : Page0);
-//	}
-//
-//	os_timer_disarm(&scrollTmr);
-//	os_timer_setfn(&scrollTmr, (os_timer_func_t *)displayScrollTmrCb, NULL);
-//	os_timer_arm(&scrollTmr, 1, 0);
-//}
-
 
 void ICACHE_FLASH_ATTR dispSetOrientation(Orientation orientation)
 {
-	if (dispScrollCurLine != 0 && dispScrollCurLine != 64)
-	{
-		return;		// do not rotate while scrolling
-	}
 	switch (orientation)
 	{
 	case orient0deg:

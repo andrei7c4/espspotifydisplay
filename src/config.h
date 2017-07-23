@@ -25,13 +25,11 @@ typedef struct{
 
 	char access_token[256];
 	char refresh_token[256];
-
 	uint tokenExpireTs;
 
 	int pollInterval;
 
-	int dispScrollEn;
-	int titleScrollEn;
+	int scrollEn;
     
     int debugEn;
 }Config;

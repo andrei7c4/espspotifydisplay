@@ -28,8 +28,7 @@ void ICACHE_FLASH_ATTR configInit(Config *config)
 
 	config->tokenExpireTs = 0;
 
-	config->dispScrollEn = TRUE;
-	config->titleScrollEn = TRUE;
+	config->scrollEn = TRUE;
     
     config->debugEn = TRUE;
 }
@@ -169,14 +168,9 @@ LOCAL int ICACHE_FLASH_ATTR setPollInterval(const char *value, uint valueLen)
 	return setIntParam(&config.pollInterval, 1, INT_MAX, value, valueLen);
 }
 
-LOCAL int ICACHE_FLASH_ATTR setDispScroll(const char *value, uint valueLen)
+LOCAL int ICACHE_FLASH_ATTR setScroll(const char *value, uint valueLen)
 {
-	return setBoolParam(&config.dispScrollEn, value, valueLen);
-}
-
-LOCAL int ICACHE_FLASH_ATTR setTitleScroll(const char *value, uint valueLen)
-{
-	return setBoolParam(&config.titleScrollEn, value, valueLen);
+	return setBoolParam(&config.scrollEn, value, valueLen);
 }
 
 LOCAL int ICACHE_FLASH_ATTR setDebug(const char *value, uint valueLen)
@@ -198,8 +192,7 @@ CmdEntry commands[] = {
 	{"client_secret", setClientSecret},
 	{"auth_code", setAuthCode},
 	{"poll", setPollInterval},
-	{"disp_scroll", setDispScroll},
-	{"title_scroll", setTitleScroll},
+	{"scroll", setScroll},
 	{"debug", setDebug},
 	{"reset", resetConfig},
 };
