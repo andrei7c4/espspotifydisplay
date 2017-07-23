@@ -7,7 +7,7 @@
 
 extern void initAuthBasicStr(void);
 extern void connectToAuthHost(void);
-
+char auth_code[400] = "";
 
 Config config;
 
@@ -154,15 +154,15 @@ LOCAL int ICACHE_FLASH_ATTR setClientSecret(const char *value, uint valueLen)
 	return OK;
 }
 
-//LOCAL int ICACHE_FLASH_ATTR setAuthCode(const char *value, uint valueLen)
-//{
-//	if (setParam(config.auth_code, sizeof(config.auth_code), value, valueLen) != OK)
-//	{
-//		return ERROR;
-//	}
-//	connectToAuthHost();
-//	return OK;
-//}
+LOCAL int ICACHE_FLASH_ATTR setAuthCode(const char *value, uint valueLen)
+{
+	if (setParam(auth_code, sizeof(auth_code), value, valueLen) != OK)
+	{
+		return ERROR;
+	}
+	connectToAuthHost();
+	return OK;
+}
 
 LOCAL int ICACHE_FLASH_ATTR setPollInterval(const char *value, uint valueLen)
 {
@@ -196,7 +196,7 @@ CmdEntry commands[] = {
 	{"pass", setPass},
 	{"client_id", setClientId},
 	{"client_secret", setClientSecret},
-	//{"auth_code", setAuthCode},
+	{"auth_code", setAuthCode},
 	{"poll", setPollInterval},
 	{"disp_scroll", setDispScroll},
 	{"title_scroll", setTitleScroll},

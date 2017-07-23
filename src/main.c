@@ -25,8 +25,7 @@
 
 
 char authBasicStr[100] = "";
-
-char auth_code[400] = "";
+extern char auth_code[];
 
 TrackInfo curTrack = {{0,0},{0,0},0,0,0};
 
@@ -320,16 +319,11 @@ LOCAL void ICACHE_FLASH_ATTR connectToHost(ConnParams *params)
 
 void ICACHE_FLASH_ATTR connectToAuthHost(void)	// called from config.c
 {
-	if (authBasicStr[0] && auth_code[0])
+	if (appState >= stateConnectToAp && authBasicStr[0] && auth_code[0])
 	{
 		authConnParams.requestFunc = requestTokens;
 		connectToHost(&authConnParams);
 	}
-}
-
-void ICACHE_FLASH_ATTR connectToApiHost(void)	// called from config.c
-{
-	connectToHost(&apiConnParams);
 }
 
 LOCAL void ICACHE_FLASH_ATTR connectFirstTime(ConnParams *params)
@@ -535,20 +529,22 @@ LOCAL void ICACHE_FLASH_ATTR updateTrackProgress(int progress, int duration)
 	int timeStrWidth = drawStrAlignRight_Latin(&arial13, DISP_WIDTH-1, 50, timeStr, len);
 
 	int barX = timeStrWidth + 7;
-	int barMaxWidth = DISP_WIDTH - (barX*2);
+	int barMaxWidth = DISP_WIDTH-1 - (barX*2);
+	int barXmax = barX+barMaxWidth-1;
+	int barY = 59;
+	int barHeight = 3;
+	int barY2 = barY+barHeight-1;
+	drawLine(barX, barY-1, barXmax, barY-1, 1);
+	drawLine(barX, barY2+1, barXmax, barY2+1, 1);
+	drawLine(barX-1, barY, barX-1, barY2, 1);
+	drawLine(barXmax+1, barY, barXmax+1, barY2, 1);
+
 	float progressPercent = ((float)progress) / duration;
 	int barWidth = progressPercent * barMaxWidth + 0.5;
 	if (barWidth > 0)
 	{
-		int barHeight = 4;
-		int barY = 57;
 		int barX2 = barX+barWidth-1;
-		int barY2 = barY+barHeight-1;
 		drawRect(barX, barY, barX2, barY2, 1);
-		drawPixel(barX, barY, 0);
-		drawPixel(barX, barY2, 0);
-		drawPixel(barX2, barY, 0);
-		drawPixel(barX2, barY2, 0);
 	}
 
 	dispUpdate(50, 14);
@@ -741,6 +737,10 @@ LOCAL void ICACHE_FLASH_ATTR parseApiReply(void)
 			else
 			{
 				debug("same track\n");
+				if (!curTrack.isPlaying && track.isPlaying)
+				{
+					wakeupDisplay();
+				}
 			}
 
 			track.progress /= 1000;		// no need for ms precision

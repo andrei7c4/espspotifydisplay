@@ -3,7 +3,7 @@
 
 #include "uart_register.h"
 
-#define RX_BUFF_SIZE    0x100
+#define RX_BUFF_SIZE    400
 #define TX_BUFF_SIZE    100
 
 typedef enum {
