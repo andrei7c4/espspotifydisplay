@@ -98,7 +98,7 @@ void ICACHE_FLASH_ATTR initArtistScroll(void)
 LOCAL int ICACHE_FLASH_ATTR dispScrollStep(Scroll *scroll)
 {
 	int y;
-	if (scroll->y2 < (scroll->height-1))
+	if (scroll->y2 < scroll->height)
 	{
 		for (y = scroll->offset; y < (scroll->offset + scroll->height - 1); y++)
 		{

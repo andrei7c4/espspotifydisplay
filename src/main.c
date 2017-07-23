@@ -196,8 +196,7 @@ void user_init(void)
 
 	SSD1322_init();
 
-	//drawSpotifyLogo();
-	dispClearMemAll();
+	drawSpotifyLogo();
 	dispUpdateFull();
 	wakeupDisplay();
 	
@@ -515,18 +514,18 @@ LOCAL void ICACHE_FLASH_ATTR pollCurTrackTmrCb(void)
 LOCAL void ICACHE_FLASH_ATTR updateTrackProgress(int progress, int duration)
 {
 	dispSetActiveMemBuf(MainMemBuf);
-	dispClearMem(50, 14);
+	dispClearMem(BLANK_SPACE_OFFSET, BLANK_SPACE_HEIGHT+PROGBAR_HEIGHT);
 
 	char timeStr[7];
 	int minutes = progress / 60;
 	int seconds = progress % 60;
 	int len = ets_snprintf(timeStr, sizeof(timeStr), "%d:%02d", minutes, seconds);
-	drawStr_Latin(&arial13, 0, 50, timeStr, len);
+	drawStr_Latin(&arial13, 0, PROGBAR_OFFSET, timeStr, len);
 
 	minutes = duration / 60;
 	seconds = duration % 60;
 	len = ets_snprintf(timeStr, sizeof(timeStr), "%d:%02d", minutes, seconds);
-	int timeStrWidth = drawStrAlignRight_Latin(&arial13, DISP_WIDTH-1, 50, timeStr, len);
+	int timeStrWidth = drawStrAlignRight_Latin(&arial13, DISP_WIDTH-1, PROGBAR_OFFSET, timeStr, len);
 
 	int barX = timeStrWidth + 7;
 	int barMaxWidth = DISP_WIDTH-1 - (barX*2);
@@ -547,7 +546,7 @@ LOCAL void ICACHE_FLASH_ATTR updateTrackProgress(int progress, int duration)
 		drawRect(barX, barY, barX2, barY2, 1);
 	}
 
-	dispUpdate(50, 14);
+	dispUpdate(BLANK_SPACE_OFFSET, BLANK_SPACE_HEIGHT+PROGBAR_HEIGHT);
 }
 
 LOCAL void ICACHE_FLASH_ATTR progressTmrCb(void)
