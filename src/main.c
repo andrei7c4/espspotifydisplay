@@ -188,11 +188,11 @@ void user_init(void)
 	// clock is high when inactive
 	spi_mode(HSPI, 1, 1);
 
-//	if (mpu6500_init() == OK)
-//	{
-//		// accelerometer found -> read values twice per second
-//		os_timer_arm(&accelTmr, 500, 1);
-//	}
+	if (mpu6500_init() == OK)
+	{
+		// accelerometer found -> read values twice per second
+		os_timer_arm(&accelTmr, 500, 1);
+	}
 
 	SSD1322_init();
 
