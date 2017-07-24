@@ -23,7 +23,6 @@ LOCAL const char *spotifyPlayerNextEndpoint = "/v1/me/player/next";
 LOCAL char httpReqBuf[HTTP_REQ_MAX_LEN];
 
 extern struct espconn espConn;
-
 extern char authBasicStr[80];
 
 
@@ -318,7 +317,7 @@ LOCAL int ICACHE_FLASH_ATTR formHttpRequest(char *dst, int dstSize,
 	}
 
 	int contentLen = 0;
-	if (httpMethod == httpPOST)
+	if (httpMethod == httpPOST || httpMethod == httpPUT)
 	{
 		contentLen = paramListStrLen(paramList);
 	}
@@ -439,26 +438,26 @@ int ICACHE_FLASH_ATTR spotifySendPlayerCmd(const char *host, PlayerCmd cmd)
 	ParamList params;
 	os_memset(&params, 0, sizeof(ParamList));
 	HttpMethod method;
-	const char *endPoint = NULL;
+	const char *endpoint = NULL;
 	switch (cmd)
 	{
 	case cmdPlay:
 		method = httpPUT;
-		endPoint = spotifyPlayerPlayEndpoint;
+		endpoint = spotifyPlayerPlayEndpoint;
 		break;
 	case cmdPause:
 		method = httpPUT;
-		endPoint = spotifyPlayerPauseEndpoint;
+		endpoint = spotifyPlayerPauseEndpoint;
 		break;
 	case cmdNext:
 		method = httpPOST;
-		endPoint = spotifyPlayerNextEndpoint;
+		endpoint = spotifyPlayerNextEndpoint;
 		break;
 	}
-	if (endPoint)
+	if (endpoint)
 	{
 		int requestLen = formHttpRequest(httpReqBuf, HTTP_REQ_MAX_LEN,
-				method, host, endPoint, &params, authBearer);
+				method, host, endpoint, &params, authBearer);
 		if (requestLen > 0)
 		{
 			if (espconn_secure_send(&espConn, (uint8*)httpReqBuf, requestLen) == OK)
