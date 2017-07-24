@@ -41,75 +41,7 @@ float ICACHE_FLASH_ATTR strtofloat(const char* s)
 }
 
 
-LOCAL char ICACHE_FLASH_ATTR asciiHexToBin(char asciiHex)
-{
-	if (asciiHex >= '0' && asciiHex <= '9')
-	{
-		return asciiHex - '0';
-	}
-	else if (asciiHex >= 'A' && asciiHex <= 'F')
-	{
-		return asciiHex - 'A'+10;
-	}
-	else if (asciiHex >= 'a' && asciiHex <= 'f')
-	{
-		return asciiHex - 'a'+10;
-	}
-	return ERROR;
-}
 
-LOCAL unsigned int ICACHE_FLASH_ATTR asciiHexStrToBin(char *str, int len)
-{
-	int i;
-	unsigned int value = 0;
-	char nibble;
-	for (i = 0; i < len; i++)
-	{
-		nibble = asciiHexToBin(*str++);
-		if (nibble == ERROR)
-		{
-			return ERROR;
-		}
-		value <<= 4;
-		value |= (nibble&0x0F);
-	}
-	return value;
-}
-
-LOCAL int ICACHE_FLASH_ATTR utf8strlen(char *str, int strLen)
-{
-	int i = 0;
-	int length = 0;
-	while (*str)
-	{
-		if (*str == '\\' && *(str+1) == 'u')
-		{
-			i += 6;
-			if (i > strLen)
-			{
-				return length;
-			}
-			str += 6;
-			length++;
-		}
-		else if (*str == '\\' && *(str+1) == 'U')
-		{
-			i += 10;
-			if (i > strLen)
-			{
-				return length;
-			}
-			str += 10;
-		}
-		else
-		{
-			i++;
-			str++;
-			length++;
-		}
-	}
-	return length;
-}
 
 int ICACHE_FLASH_ATTR decodeUtf8(const char *str, int strLen, ushort **utf8str)
 {

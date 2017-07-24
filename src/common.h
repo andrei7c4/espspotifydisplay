@@ -8,8 +8,6 @@
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
 
-int clampInt(int value, int min, int max);
-
 
 #define spiFlashRead(dst, addr, length) do{ spi_flash_read((uint)addr, dst, length); }while(0)
 uint spiFlashReadDword(const uint *addr);
