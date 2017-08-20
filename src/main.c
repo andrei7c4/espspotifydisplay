@@ -78,6 +78,7 @@ LOCAL int disconnExpected = FALSE;
 LOCAL int reconnCbCalled = FALSE;
 
 LOCAL void connectToWiFiAP(void);
+LOCAL uint8 getWiFiStatusAndIp(uint32 *addr);
 LOCAL void checkWiFiConnStatus(void);
 LOCAL void checkSntpSync(void);
 LOCAL void connectToHost(ConnParams *params);
@@ -117,6 +118,21 @@ LOCAL void ICACHE_FLASH_ATTR setAppState(AppState newState)
 		debug("appState %d\n", (int)appState);
 	}
 }
+
+
+typedef enum{
+	NotPressed,
+	Button1,
+	Button2
+}Button;
+
+LOCAL Button adcValToButton(uint16 adcVal)
+{
+	if (adcVal >= 768) return NotPressed;
+	if (adcVal >= 256) return Button1;
+	return Button2;
+}
+
 
 void ICACHE_FLASH_ATTR initAuthBasicStr(void)
 {
@@ -207,8 +223,12 @@ void user_init(void)
 	wifi_set_opmode(STATION_MODE);
 	connectToWiFiAP();
     
-	// enable buttons scan
-	os_timer_arm(&buttonsTmr, 100, 1);
+	if (adcValToButton(system_adc_read()) == NotPressed)
+	{
+		// enable buttons scan
+		os_timer_arm(&buttonsTmr, 100, 1);
+	}
+	//else pull-ups are probably not installed -> don't scan buttons
 }
 
 LOCAL void ICACHE_FLASH_ATTR connectToWiFiAP(void)
@@ -222,15 +242,25 @@ LOCAL void ICACHE_FLASH_ATTR connectToWiFiAP(void)
 	checkWiFiConnStatus();
 }
 
-LOCAL void ICACHE_FLASH_ATTR checkWiFiConnStatus(void)
+LOCAL uint8 ICACHE_FLASH_ATTR getWiFiStatusAndIp(uint32 *addr)
 {
 	struct ip_info ipconfig;
 	memset(&ipconfig, 0, sizeof(ipconfig));
+	uint8 status = wifi_station_get_connect_status();
+	if (status == STATION_GOT_IP)
+	{
+		wifi_get_ip_info(STATION_IF, &ipconfig);
+	}
+	*addr = ipconfig.ip.addr;
+	return status;
+}
 
+LOCAL void ICACHE_FLASH_ATTR checkWiFiConnStatus(void)
+{
 	// check current connection status and own ip address
-	wifi_get_ip_info(STATION_IF, &ipconfig);
-	uint8 connStatus = wifi_station_get_connect_status();
-	if (connStatus == STATION_GOT_IP && ipconfig.ip.addr != 0)
+	uint32 ipAddr;
+	uint8 connStatus = getWiFiStatusAndIp(&ipAddr);
+	if (connStatus == STATION_GOT_IP && ipAddr != 0)
 	{
 		// connection with AP established -> sync time
         // TODO: make addresses configurable
@@ -290,6 +320,12 @@ LOCAL void ICACHE_FLASH_ATTR checkSntpSync(void)
 
 LOCAL void ICACHE_FLASH_ATTR connectToHost(ConnParams *params)
 {
+	uint32 ipAddr;
+	uint8 connStatus = getWiFiStatusAndIp(&ipAddr);
+	if (connStatus != STATION_GOT_IP || !ipAddr)
+	{
+		return;
+	}
     setAppState(stateConnectToHost);
         
 	espConn.reverse = params;
@@ -670,6 +706,7 @@ LOCAL void ICACHE_FLASH_ATTR parseAuthReply(void)
 				&expiresIn) != OK)
 		{
 			debug("parseTokens failed\n");
+			debug("%s\n", httpMsgRxBuf);
 			return;
 		}
 		uint ts = sntp_get_current_timestamp();
@@ -813,20 +850,6 @@ LOCAL void ICACHE_FLASH_ATTR parseApiReply(void)
 }
 
 
-
-
-typedef enum{
-	NotPressed,
-	Button1,
-	Button2
-}Button;
-
-LOCAL Button adcValToButton(uint16 adcVal)
-{
-	if (adcVal >= 768) return NotPressed;
-	if (adcVal >= 256) return Button1;
-	return Button2;
-}
 
 LOCAL void ICACHE_FLASH_ATTR buttonsScanTmrCb(void)
 {
