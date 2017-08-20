@@ -19,6 +19,7 @@
 #include "fonts/font_13b_E801_FFEE.h"
 #include "fonts/font_10_FFFC_FFFE.h"
 #include "fonts/font_13_FFFC_FFFE.h"
+#include "fonts/font_sevensegment.h"
 #include "fonts.h"
 #include "common.h"
 
@@ -62,3 +63,7 @@ const uint *arial13b_blocks[] = {
 	BLOCK(font_13_FFFC_FFFE),
 	BLOCK(font_13b_E801_FFEE)};
 const Font arial13b = {arial13b_blocks, NELEMENTS(arial13b_blocks)};
+
+
+const uint *sevensegment_blocks[] = {BLOCK(font_sevensegment)};
+const Font sevensegment = {sevensegment_blocks, NELEMENTS(sevensegment_blocks)};

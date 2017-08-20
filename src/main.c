@@ -556,12 +556,12 @@ LOCAL void ICACHE_FLASH_ATTR updateTrackProgress(int progress, int duration)
 	int minutes = progress / 60;
 	int seconds = progress % 60;
 	int len = ets_snprintf(timeStr, sizeof(timeStr), "%d:%02d", minutes, seconds);
-	drawStr_Latin(&arial13, 0, PROGBAR_OFFSET, timeStr, len);
+	drawStr_Latin(&sevensegment, 0, PROGBAR_OFFSET, timeStr, len);
 
 	minutes = duration / 60;
 	seconds = duration % 60;
 	len = ets_snprintf(timeStr, sizeof(timeStr), "%d:%02d", minutes, seconds);
-	int timeStrWidth = drawStrAlignRight_Latin(&arial13, DISP_WIDTH-1, PROGBAR_OFFSET, timeStr, len);
+	int timeStrWidth = drawStrAlignRight_Latin(&sevensegment, DISP_WIDTH-1, PROGBAR_OFFSET, timeStr, len);
 
 	int barX = timeStrWidth + 7;
 	int barMaxWidth = DISP_WIDTH-1 - (barX*2);

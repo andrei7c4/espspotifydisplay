@@ -16,6 +16,8 @@ extern const Font arial10b;
 extern const Font arial13;
 extern const Font arial13b;
 
+extern const Font sevensegment;
+
 
 //#define REPLACEMENT_CHAR	0xFFFD
 #define REPLACEMENT_CHAR	' '
