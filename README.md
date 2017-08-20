@@ -33,3 +33,6 @@ Next, we need to obtain the authorization code:
 The device should now be able to login to Spotify with the user's account and display the currently playing track. By default the device will poll Spotify server every 10 seconds. Poll interval can be changed with `poll` parameter (value in seconds). Please see the [config.c](src/config.c) file for additional supported parameters.
 
 There are two buttons: one to pause and resume the playback and another to skip to next track.
+
+***
+[![](http://img.youtube.com/vi/AxqHfZzo1p8/sddefault.jpg)](https://youtu.be/AxqHfZzo1p8)
