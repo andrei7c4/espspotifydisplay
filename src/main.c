@@ -599,11 +599,29 @@ LOCAL void ICACHE_FLASH_ATTR progressTmrCb(void)
 }
 
 
+LOCAL void ICACHE_FLASH_ATTR authRequestRetry(void)
+{
+	// only ESPCONN_CONNECT state is good for sending data
+	if (espConn.state == ESPCONN_CONNECT && espConn.reverse == &authConnParams)
+	{
+		authConnParams.requestFunc();
+	}
+	else	// in all other cases we need to reconnect
+	{
+		connectToHost(&authConnParams);
+	}
+}
+
 LOCAL void ICACHE_FLASH_ATTR requestTokens(void)
 {
     if (spotifyRequestTokens(authConnParams.host, auth_code) == OK)
     {
         setAppState(stateRequestSent);
+
+        // if no answer, retry after 5s
+		os_timer_disarm(&gpTmr);
+		os_timer_setfn(&gpTmr, (os_timer_func_t*)authRequestRetry, 0);
+		os_timer_arm(&gpTmr, 5000, 0);
     }
 }
 
@@ -612,6 +630,11 @@ LOCAL void ICACHE_FLASH_ATTR refreshTokens(void)
 	if (spotifyRefreshTokens(authConnParams.host, config.refresh_token) == OK)
 	{
 		setAppState(stateRequestSent);
+
+        // if no answer, retry after 5s
+		os_timer_disarm(&gpTmr);
+		os_timer_setfn(&gpTmr, (os_timer_func_t*)authRequestRetry, 0);
+		os_timer_arm(&gpTmr, 5000, 0);
 	}
 }
 
@@ -683,6 +706,7 @@ LOCAL void ICACHE_FLASH_ATTR sendNextTrackCmd(void)
 LOCAL void ICACHE_FLASH_ATTR parseAuthReply(void)
 {
 	setAppState(stateReplyReceived);
+	os_timer_disarm(&gpTmr);
 
 	debug("parseAuthReply, len %d\n", httpRxMsgCurLen);
 	httpMsgRxBuf[httpRxMsgCurLen] = '\0';
@@ -730,92 +754,95 @@ LOCAL void ICACHE_FLASH_ATTR parseApiReply(void)
 	if (apiConnParams.requestFunc == getCurrentlyPlaying)
 	{
 		char *json = (char*)os_strstr(httpMsgRxBuf, "{");
-		if (!json)
+		if (json)
 		{
-			httpRxMsgCurLen = 0;
-			return;
-		}
-		int jsonLen = httpRxMsgCurLen - (json - httpMsgRxBuf);
-		//debug("jsonLen %d\n", jsonLen);
+			int jsonLen = httpRxMsgCurLen - (json - httpMsgRxBuf);
+			//debug("jsonLen %d\n", jsonLen);
 
-		TrackInfo track;
-		os_memset(&track, 0, sizeof(TrackInfo));
-		if (parseTrackInfo(json, jsonLen, &track) == OK)
-		{
-			if (wstrcmp(curTrack.name.str, track.name.str))
+			TrackInfo track;
+			os_memset(&track, 0, sizeof(TrackInfo));
+			if (parseTrackInfo(json, jsonLen, &track) == OK)
 			{
-				debug("new track\n");
-				void (*dispUpdateFunc)(void);
-				if (config.scrollEn)
+				if (wstrcmp(curTrack.name.str, track.name.str))
 				{
-					dispUpdateFunc = scrollTitle;
-					dispSetActiveMemBuf(TitleMemBuf);
-					dispMemClearAll();
-				}
-				else
-				{
-					dispUpdateFunc = dispUpdateTitle;
-					dispSetActiveMemBuf(MainMemBuf);
-					dispMemClearTitle();
-				}
-				drawStr(&arial13b, 0, 0, track.name.str, track.name.length);
-
-				if (!strListEqual(&curTrack.artists, &track.artists))
-				{
-					debug("new artist\n");
-					int textPos;
+					debug("new track\n");
+					void (*dispUpdateFunc)(void);
 					if (config.scrollEn)
 					{
-						dispUpdateFunc = scrollTitleArtist;
-						dispSetActiveMemBuf(ArtistMemBuf);
+						dispUpdateFunc = scrollTitle;
+						dispSetActiveMemBuf(TitleMemBuf);
 						dispMemClearAll();
-						textPos = 0;
 					}
 					else
 					{
-						dispUpdateFunc = dispUpdateTitleArtist;
+						dispUpdateFunc = dispUpdateTitle;
 						dispSetActiveMemBuf(MainMemBuf);
-						dispMemClearArtist();
-						textPos = ARTIST_OFFSET;
+						dispMemClearTitle();
 					}
-					StrBuf separator;
-					ushort sepStr[] = {',', ' ', '\0'};
-					separator.str = sepStr;
-					separator.length = NELEMENTS(sepStr)-1;
-					strListDraw(&arial13, 0, textPos, &track.artists, &separator);
+					drawStr(&arial13b, 0, 0, track.name.str, track.name.length);
+
+					if (!strListEqual(&curTrack.artists, &track.artists))
+					{
+						debug("new artist\n");
+						int textPos;
+						if (config.scrollEn)
+						{
+							dispUpdateFunc = scrollTitleArtist;
+							dispSetActiveMemBuf(ArtistMemBuf);
+							dispMemClearAll();
+							textPos = 0;
+						}
+						else
+						{
+							dispUpdateFunc = dispUpdateTitleArtist;
+							dispSetActiveMemBuf(MainMemBuf);
+							dispMemClearArtist();
+							textPos = ARTIST_OFFSET;
+						}
+						StrBuf separator;
+						ushort sepStr[] = {',', ' ', '\0'};
+						separator.str = sepStr;
+						separator.length = NELEMENTS(sepStr)-1;
+						strListDraw(&arial13, 0, textPos, &track.artists, &separator);
+					}
+					else
+					{
+						debug("same artist\n");
+					}
+					dispUpdateFunc();
+					wakeupDisplay();
 				}
 				else
 				{
-					debug("same artist\n");
+					debug("same track\n");
+					if (!curTrack.isPlaying && track.isPlaying)
+					{
+						wakeupDisplay();
+					}
 				}
-				dispUpdateFunc();
-				wakeupDisplay();
+
+				track.progress /= 1000;		// no need for ms precision
+				track.duration /= 1000;
+				updateTrackProgress(track.progress, track.duration);
+				os_timer_disarm(&progressTmr);
+				if (track.isPlaying)
+				{
+					os_timer_arm(&progressTmr, 1000, 1);
+				}
+
+				trackInfoFree(&curTrack);
+				curTrack = track;
 			}
 			else
 			{
-				debug("same track\n");
-				if (!curTrack.isPlaying && track.isPlaying)
-				{
-					wakeupDisplay();
-				}
+				debug("parseTrack failed\n");
+				trackInfoFree(&track);
 			}
-
-			track.progress /= 1000;		// no need for ms precision
-			track.duration /= 1000;
-			updateTrackProgress(track.progress, track.duration);
-			os_timer_disarm(&progressTmr);
-			if (track.isPlaying)
-			{
-				os_timer_arm(&progressTmr, 1000, 1);
-			}
-
-			trackInfoFree(&curTrack);
-			curTrack = track;
 		}
 		else
 		{
-			debug("parseTrack failed\n");
-			trackInfoFree(&track);
+			debug("track info not available\n");
+			curTrack.isPlaying = FALSE;
 		}
 
 		os_timer_disarm(&pollCurTrackTmr);
@@ -893,7 +920,15 @@ LOCAL void ICACHE_FLASH_ATTR screenSaverTmrCb(void)
 		os_timer_arm(&screenSaverTmr, 15*60*1000, 0);
 		break;
 	case stateDimmed:
-		dispVerticalSqueezeStart();
+		if (curTrack.isPlaying)
+		{
+			// do not turn off the display while track is playing
+			os_timer_arm(&screenSaverTmr, 5*60*1000, 0);
+		}
+		else
+		{
+			dispVerticalSqueezeStart();
+		}
 		break;
 	}
 }
