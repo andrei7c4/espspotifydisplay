@@ -144,7 +144,7 @@ void ICACHE_FLASH_ATTR SSD1322_setRemap(uchar paramA, uchar paramB)
 	SSD1322_write(paramB, eData);
 }
 
-void ICACHE_FLASH_ATTR SSD1322_cpyMemBuf(uchar mem[][DISP_MEMWIDTH], int memRow, uchar dispRow, int height)
+void ICACHE_FLASH_ATTR SSD1322_cpyMemBuf(uchar *mem, int memWidth, int memRow, uchar dispRow, int height)
 {
     int x, y;
 	uchar temp,temp1,temp2,temp3,temp4,temp5,temp6,temp7,temp8;
@@ -160,7 +160,7 @@ void ICACHE_FLASH_ATTR SSD1322_cpyMemBuf(uchar mem[][DISP_MEMWIDTH], int memRow,
         for (x = 0; x < DISP_MEMWIDTH; x++)
 		{
         	// form 8 pixel width block
-			temp = mem[y][x];
+			temp = *(mem + y*memWidth + x);
 			temp1=temp&0x80;
 			temp2=(temp&0x40)>>3;
 			temp3=(temp&0x20)<<2;

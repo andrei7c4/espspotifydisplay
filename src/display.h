@@ -17,12 +17,8 @@ extern Orientation dispOrient;
 
 void dispUpdate(int row, int height);
 void dispUpdateFull(void);
-void dispUpdateTitle(void);
-void dispUpdateTitleArtist(void);
 void dispUpdateProgBar(void);
 
-void scrollTitle(void);
-void scrollTitleArtist(void);
 
 void dispDimmingStart(void);
 void dispVerticalSqueezeStart(void);

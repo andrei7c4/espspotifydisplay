@@ -2,7 +2,6 @@
 #define INCLUDE_DISPLAY_H_
 
 #include "typedefs.h"
-#include "fonts.h"
 
 #define DISP_HEIGHT		64
 #define DISP_WIDTH		256
@@ -21,42 +20,51 @@
 #define BLANK_SPACE_HEIGHT	(PROGBAR_OFFSET-BLANK_SPACE_OFFSET)
 
 
-extern uchar mem1[DISP_HEIGHT][DISP_MEMWIDTH];
-extern uchar (*pMem)[DISP_MEMWIDTH];
-extern int memHeight;
+struct GfxBuf_
+{
+	uchar *buf;
+	int memWidth;
+	int width;
+	int height;
+};
+typedef struct GfxBuf_ GfxBuf;
 
-typedef enum{
-	MainMemBuf,
-	TitleMemBuf,
-	ArtistMemBuf,
-	TempMemBuf
-}MemBufType;
+struct Label_
+{
+	GfxBuf buf;
+	int offset;
+	int scrollEn;
+	int vScrollY;
+	int hScrollX;
+	int hScrollBit;
+};
+typedef struct Label_ Label;
 
-void dispSetActiveMemBuf(MemBufType memBuf);
+extern GfxBuf MainGfxBuf;
+extern GfxBuf TempGfxBuf;
+extern GfxBuf *activeBuf;
 
-void dispMemFill(uchar data, int row, int height);
-void dispMemClearAll(void);
-void dispMemClearTitle(void);
-void dispMemClearArtist(void);
-void dispMemClearProgBar(void);
+extern Label TitleLabel;
+extern Label ArtistLabel;
 
-void titleScrollInit(void);
-void artistScrollInit(void);
+extern int inverseColor;
 
-int titleScrollStep(void);
-int artistScrollStep(void);
+
+void GfxBufAlloc(GfxBuf *buf, int width);
+void GfxBufCopy(GfxBuf *dst, GfxBuf *src, int dstRow);
+
+void activeBufFill(uchar data, int row, int height);
+void activeBufClearAll(void);
+void activeBufClearProgBar(void);
+
 
 
 void drawImage(int x, int y, const uint *image);
 void drawBitmapPixelByPixel(int x, int y, int bmWidth, int bmHeight, const uint *bitmap, int bitmapSize);
 
-void inverseColor(int inverse);
-
-void (*drawPixel)(int x, int y, char color);
-void drawPixelNormal(int x, int y, char color);
-void drawPixelInverse(int x, int y, char color);
-void drawLine(int x0, int y0, int x1, int y1, char color);
-void drawRect(int x0, int y0, int x1, int y1, char color);
+void drawPixel(int x, int y, int color);
+void drawLine(int x0, int y0, int x1, int y1, int color);
+void drawRect(int x0, int y0, int x1, int y1, int color);
 
 
 #endif /* INCLUDE_DISPLAY_H_ */

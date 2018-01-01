@@ -16,7 +16,6 @@ LOCAL uchar charWidth(const Font *font, ushort ch);
 LOCAL uchar charHeight(const Font *font, ushort ch);
 LOCAL int charYoffset(const Font *font, ushort ch);
 LOCAL int strLength(const ushort *str);
-LOCAL int strWidth(const Font *font, const ushort *str);
 
 
 LOCAL StrListItem* ICACHE_FLASH_ATTR allocStrListItem(const ushort *str, int length)
@@ -52,8 +51,9 @@ void ICACHE_FLASH_ATTR strListAppend(StrList *list, const ushort *str, int lengt
 	}
 }
 
-void ICACHE_FLASH_ATTR strListDraw(const Font *font, int x, int y, StrList *list, StrBuf *separator)
+void ICACHE_FLASH_ATTR strListDraw(const Font *font, int x, int y, StrList *list, const ushort *separator)
 {
+	int separatorLen = strLength(separator);
     StrListItem *item = list->first;
     while (item)
     {
@@ -61,7 +61,7 @@ void ICACHE_FLASH_ATTR strListDraw(const Font *font, int x, int y, StrList *list
     	item = item->next;
     	if (item)
     	{
-        	x += drawStr(font, x, y, separator->str, separator->length);
+        	x += drawStr(font, x, y, separator, separatorLen);
     	}
     }
 }
@@ -295,7 +295,7 @@ LOCAL int ICACHE_FLASH_ATTR charYoffset(const Font *font, ushort ch)
 
 
 
-LOCAL int strLength(const ushort *str)
+LOCAL int ICACHE_FLASH_ATTR strLength(const ushort *str)
 {
 	const ushort *pStr = str;
 	while (*pStr)
@@ -305,7 +305,7 @@ LOCAL int strLength(const ushort *str)
 	return pStr - str;
 }
 
-LOCAL int ICACHE_FLASH_ATTR strWidth(const Font *font, const ushort *str)
+int ICACHE_FLASH_ATTR strWidth(const Font *font, const ushort *str)
 {
 	int width = 0;
     while (*str)
@@ -313,6 +313,23 @@ LOCAL int ICACHE_FLASH_ATTR strWidth(const Font *font, const ushort *str)
         ushort ch = *str;
         width += charWidth(font, ch);
         str++;
+    }
+    return width;
+}
+
+int ICACHE_FLASH_ATTR strListWidth(const Font *font, StrList *list, const ushort *separator)
+{
+	int sepWidth = strWidth(font, separator);
+    StrListItem *item = list->first;
+    int width = 0;
+    while (item)
+    {
+    	width += strWidth(font, item->str);
+    	item = item->next;
+    	if (item)
+    	{
+    		width += sepWidth;
+    	}
     }
     return width;
 }

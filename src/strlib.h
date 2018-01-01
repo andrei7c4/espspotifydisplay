@@ -28,7 +28,7 @@ struct StrList
 };
 
 void strListAppend(StrList *list, const ushort *str, int length);
-void strListDraw(const Font *font, int x, int y, StrList *list, StrBuf *separator);
+void strListDraw(const Font *font, int x, int y, StrList *list, const ushort *separator);
 int strListEqual(StrList *list1, StrList *list2);
 void strListClear(StrList *list);
 
@@ -37,6 +37,8 @@ int drawStr(const Font *font, int x, int y, const ushort *str, int length);
 int drawStr_Latin(const Font *font, int x, int y, const char *str, int length);
 int drawStrAlignRight_Latin(const Font *font, int right, int y, const char *str, int length);
 
+int strWidth(const Font *font, const ushort *str);
+int strListWidth(const Font *font, StrList *list, const ushort *separator);
 int wstrcmp(const ushort *str1, const ushort *str2);
 
 

@@ -28,7 +28,7 @@ void ICACHE_FLASH_ATTR configInit(Config *config)
 
 	config->tokenExpireTs = 0;
 
-	config->scrollEn = TRUE;
+	config->scrollMode = eVHScroll;
     
     config->debugEn = TRUE;
 }
@@ -170,7 +170,7 @@ LOCAL int ICACHE_FLASH_ATTR setPollInterval(const char *value, uint valueLen)
 
 LOCAL int ICACHE_FLASH_ATTR setScroll(const char *value, uint valueLen)
 {
-	return setBoolParam(&config.scrollEn, value, valueLen);
+	return setIntParam((int*)&config.scrollMode, 0, 3, value, valueLen);
 }
 
 LOCAL int ICACHE_FLASH_ATTR setDebug(const char *value, uint valueLen)

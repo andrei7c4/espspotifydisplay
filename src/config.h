@@ -15,6 +15,14 @@
 #define CONFIG_SAVE_FLASH_ADDR		(CONFIG_SAVE_FLASH_SECTOR * SPI_FLASH_SEC_SIZE)
 #define VALID_MAGIC_NUMBER			0x0ABCDEF0
 
+typedef enum
+{
+	eNoScroll=0,
+	eVScroll,
+	eHScroll,
+	eVHScroll
+}ScrollMode;
+
 typedef struct{
 	uint magic;
 	char ssid[36];
@@ -29,7 +37,7 @@ typedef struct{
 
 	int pollInterval;
 
-	int scrollEn;
+	ScrollMode scrollMode;
     
     int debugEn;
 }Config;

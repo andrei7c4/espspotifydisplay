@@ -9,135 +9,105 @@
 #include "graphics.h"
 
 
-void (*drawPixel)(int x, int y, char color) = drawPixelNormal;
-void inverseColor(int inverse)
+LOCAL const uchar maskLut[8] = {0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01};
+LOCAL const uchar maskLutInv[8] = {0x7F, 0xBF, 0xDF, 0xEF, 0xF7, 0xFB, 0xFD, 0xFE};
+int inverseColor = FALSE;
+
+LOCAL uchar bufMain[DISP_HEIGHT*DISP_MEMWIDTH];
+GfxBuf MainGfxBuf = {bufMain, DISP_MEMWIDTH, DISP_WIDTH, DISP_HEIGHT};
+
+LOCAL uchar bufTemp[1*DISP_MEMWIDTH];
+GfxBuf TempGfxBuf= {bufTemp, DISP_MEMWIDTH, DISP_WIDTH, 1};
+
+GfxBuf *activeBuf = &MainGfxBuf;
+
+Label TitleLabel = {{NULL, 0, 0, TITLE_HEIGHT}, TITLE_OFFSET, 0,0,0};
+Label ArtistLabel = {{NULL, 0, 0, ARTIST_HEIGHT}, ARTIST_OFFSET, 0,0,0};
+
+void ICACHE_FLASH_ATTR GfxBufAlloc(GfxBuf *buf, int width)
 {
-	drawPixel = inverse ? drawPixelInverse : drawPixelNormal;
-}
-
-
-uchar mem1[DISP_HEIGHT][DISP_MEMWIDTH];
-static uchar mem2[TITLE_HEIGHT][DISP_MEMWIDTH];
-static uchar mem3[ARTIST_HEIGHT][DISP_MEMWIDTH];
-static uchar mem4[1][DISP_MEMWIDTH];
-uchar (*pMem)[DISP_MEMWIDTH] = mem1;
-int memHeight = DISP_HEIGHT;
-
-
-void ICACHE_FLASH_ATTR dispSetActiveMemBuf(MemBufType memBuf)
-{
-	switch (memBuf)
+	width = roundUp(width, 8);
+	if (width < DISP_WIDTH)
 	{
-	case MainMemBuf:
-		pMem = mem1;
-		memHeight = DISP_HEIGHT;
-		break;
-	case TitleMemBuf:
-		pMem = mem2;
-		memHeight = TITLE_HEIGHT;
-		break;
-	case ArtistMemBuf:
-		pMem = mem3;
-		memHeight = ARTIST_HEIGHT;
-		break;
-	case TempMemBuf:
-		pMem = mem4;
-		memHeight = 1;
-		break;
+		width = DISP_WIDTH;
 	}
-}
-
-void ICACHE_FLASH_ATTR dispMemFill(uchar data, int row, int height)
-{
-    for (; row < memHeight && height > 0; row++, height--)
-    {
-        os_memset(pMem[row], data, DISP_MEMWIDTH);
-    }
-}
-
-LOCAL void ICACHE_FLASH_ATTR dispMemClear(int row, int height)
-{
-	dispMemFill(0, row, height);
-}
-
-void ICACHE_FLASH_ATTR dispMemClearAll(void)
-{
-	dispMemClear(0, memHeight);
-}
-
-void ICACHE_FLASH_ATTR dispMemClearTitle(void)
-{
-	dispMemClear(TITLE_OFFSET, TITLE_HEIGHT);
-}
-
-void ICACHE_FLASH_ATTR dispMemClearArtist(void)
-{
-	dispMemClear(ARTIST_OFFSET, ARTIST_HEIGHT);
-}
-
-void ICACHE_FLASH_ATTR dispMemClearProgBar(void)
-{
-	dispMemClear(BLANK_SPACE_OFFSET, BLANK_SPACE_HEIGHT+PROGBAR_HEIGHT);
-}
-
-
-typedef struct
-{
-	int offset;
-	int height;
-	int y2;
-	uchar (*pMem)[DISP_MEMWIDTH];
-}Scroll;
-Scroll titleScroll = {TITLE_OFFSET, TITLE_HEIGHT, 0, mem2};
-Scroll artistScroll = {ARTIST_OFFSET, ARTIST_HEIGHT, 0, mem3};
-
-void ICACHE_FLASH_ATTR titleScrollInit(void)
-{
-	titleScroll.y2 = 0;
-}
-
-void ICACHE_FLASH_ATTR artistScrollInit(void)
-{
-	artistScroll.y2 = 0;
-}
-
-LOCAL int ICACHE_FLASH_ATTR dispScrollStep(Scroll *scroll)
-{
-	int y;
-	if (scroll->y2 < scroll->height)
+	else if (width > DISP_WIDTH)	// label will be scrolled
 	{
-		for (y = scroll->offset; y < (scroll->offset + scroll->height - 1); y++)
+		width += 32;			// add some blanking
+	}
+
+	int bufSize;
+	if (buf->width != width)	// need to reallocate
+	{
+		os_free(buf->buf);
+
+		buf->width = width;
+		buf->memWidth = width / 8;
+		bufSize = buf->memWidth * buf->height;
+		if (bufSize > 4096)		// some sense
 		{
-			os_memcpy(mem1[y], mem1[y+1], DISP_MEMWIDTH);
+			buf->memWidth = (4096 / buf->height) & -8;
+			buf->width = buf->memWidth * 8;
+			bufSize = buf->memWidth * buf->height;
 		}
-		os_memcpy(mem1[y], scroll->pMem[scroll->y2], DISP_MEMWIDTH);
-		scroll->y2++;
+
+		buf->buf = (uchar*)os_malloc(bufSize);
+		if (!buf->buf)
+		{
+			buf->width = 0;
+			buf->memWidth = 0;
+			return;
+		}
 	}
 	else
 	{
-		return TRUE;	// one round done
+		bufSize = buf->memWidth * buf->height;
 	}
-	return FALSE;
+	os_memset(buf->buf, inverseColor ? 0xFF : 0, bufSize);
 }
 
-int ICACHE_FLASH_ATTR titleScrollStep(void)
+void ICACHE_FLASH_ATTR GfxBufCopy(GfxBuf *dst, GfxBuf *src, int dstRow)
 {
-	return dispScrollStep(&titleScroll);
+	uchar *dstBuf = dst->buf + (dst->memWidth*dstRow);
+	uchar *srcBuf = src->buf;
+	int row;
+	for (row = 0; row < src->height && row < (dst->height - dstRow);
+			row++, dstBuf += dst->memWidth, srcBuf += src->memWidth)
+	{
+		os_memcpy(dstBuf, srcBuf, dst->memWidth);
+	}
 }
 
-int ICACHE_FLASH_ATTR artistScrollStep(void)
+
+void ICACHE_FLASH_ATTR activeBufFill(uchar data, int row, int height)
 {
-	return dispScrollStep(&artistScroll);
+	uchar *dst = activeBuf->buf + row*activeBuf->memWidth;
+    for (; row < activeBuf->height && height > 0; row++, height--, dst += activeBuf->memWidth)
+    {
+        os_memset(dst, data, activeBuf->memWidth);
+    }
 }
 
+LOCAL void ICACHE_FLASH_ATTR activeBufClear(int row, int height)
+{
+	activeBufFill(inverseColor ? 0xFF : 0, row, height);
+}
 
+void ICACHE_FLASH_ATTR activeBufClearAll(void)
+{
+	activeBufClear(0, activeBuf->height);
+}
 
+void ICACHE_FLASH_ATTR activeBufClearProgBar(void)
+{
+	activeBufClear(BLANK_SPACE_OFFSET, BLANK_SPACE_HEIGHT+PROGBAR_HEIGHT);
+}
 
 
 
 LOCAL void ICACHE_FLASH_ATTR dispDrawBitmap(int x, int y, int bmWidth, int bmHeight, const uint *bitmap, int bitmapSize)
 {
-    int maxBmHeight = memHeight-y;
+    int maxBmHeight = activeBuf->height - y;
     if (bmHeight > maxBmHeight)
     {
         bmHeight = maxBmHeight;
@@ -148,7 +118,7 @@ LOCAL void ICACHE_FLASH_ATTR dispDrawBitmap(int x, int y, int bmWidth, int bmHei
     bmWidth /= 8;
     int memX = x/8;
     int bmWidthCpy = bmWidth;
-    int maxBmWidth = (DISP_MEMWIDTH-memX);
+    int maxBmWidth = activeBuf->memWidth - memX;
     if (bmWidthCpy > maxBmWidth)
     {
         bmWidthCpy = maxBmWidth;
@@ -157,16 +127,17 @@ LOCAL void ICACHE_FLASH_ATTR dispDrawBitmap(int x, int y, int bmWidth, int bmHei
         return;
 
     int i;
-    if ((memX%4) == 0 && (bmWidthCpy%4) == 0)	// x and width dividable by 4 -> can access flash directly
+    uchar *dst = activeBuf->buf + (y*activeBuf->memWidth) + memX;
+    if ((memX&3) == 0 && (bmWidthCpy&3) == 0)	// x and width multiple of 4 -> can access flash directly
     {
     	const uchar *pBitmap = (uchar*)bitmap;
-		for (i = 0; i < bmHeight; i++, y++)
+		for (i = 0; i < bmHeight; i++, dst += activeBuf->memWidth)
 		{
-			os_memcpy(pMem[y]+memX, pBitmap, bmWidthCpy);
+			os_memcpy(dst, pBitmap, bmWidthCpy);
 			pBitmap += bmWidth;
 		}
     }
-    else	// x or width not dividable by 4 -> need a temp buffer to avoid alignment issues
+    else	// x or width not multiple of 4 -> need a temp buffer to avoid alignment issues
     {
     	bitmapSize *= sizeof(uint);		// bitmapSize is dwords
         uchar *temp = (uchar*)os_malloc(bitmapSize);
@@ -174,9 +145,9 @@ LOCAL void ICACHE_FLASH_ATTR dispDrawBitmap(int x, int y, int bmWidth, int bmHei
         if (!temp)
         	return;
         os_memcpy(pTemp, bitmap, bitmapSize);
-    	for (i = 0; i < bmHeight; i++, y++)
+    	for (i = 0; i < bmHeight; i++, dst += activeBuf->memWidth)
     	{
-    		os_memcpy(pMem[y]+memX, pTemp, bmWidthCpy);
+    		os_memcpy(dst, pTemp, bmWidthCpy);
     		pTemp += bmWidth;
     	}
         os_free(temp);
@@ -192,24 +163,11 @@ void ICACHE_FLASH_ATTR drawImage(int x, int y, const uint *image)
 }
 
 
-LOCAL int ICACHE_FLASH_ATTR roundUp(int numToRound, int multiple)
+
+LOCAL int ICACHE_FLASH_ATTR getPixel(int x, int y, int byteWidth, uchar *bitmap)
 {
-    if (multiple == 0)
-        return numToRound;
-
-    int remainder = numToRound % multiple;
-    if (remainder == 0)
-        return numToRound;
-
-    return numToRound + multiple - remainder;
-}
-
-LOCAL char ICACHE_FLASH_ATTR getPixel(int x, int y, int byteWidth, uchar *bitmap)
-{
-    int xByte = x/8;
-    int bitMask = 1<<(7-(x%8));
-    int idx = y*byteWidth+xByte;
-    return (bitmap[idx] & bitMask) != 0;
+	uchar *pBuf = bitmap + y*byteWidth + x/8;
+    return (*pBuf & maskLut[x&7]) != 0;
 }
 
 void ICACHE_FLASH_ATTR drawBitmapPixelByPixel(int x, int y, int bmWidth, int bmHeight, const uint *bitmap, int bitmapSize)
@@ -217,7 +175,7 @@ void ICACHE_FLASH_ATTR drawBitmapPixelByPixel(int x, int y, int bmWidth, int bmH
     if (x < 0) x = 0;
     if (y < 0) y = 0;
 
-	int maxBmHeight = memHeight-y;
+	int maxBmHeight = activeBuf->height - y;
     if (bmHeight > maxBmHeight)
     {
         bmHeight = maxBmHeight;
@@ -227,7 +185,7 @@ void ICACHE_FLASH_ATTR drawBitmapPixelByPixel(int x, int y, int bmWidth, int bmH
 
     int byteWidth = roundUp(bmWidth,8)/8;
 
-    int maxBmWidth = DISP_WIDTH-x;
+    int maxBmWidth = activeBuf->width - x;
     if (bmWidth > maxBmWidth)
     {
         bmWidth = maxBmWidth;
@@ -254,45 +212,18 @@ void ICACHE_FLASH_ATTR drawBitmapPixelByPixel(int x, int y, int bmWidth, int bmH
 
 
 
-void ICACHE_FLASH_ATTR drawPixelNormal(int x, int y, char color)
+void ICACHE_FLASH_ATTR drawPixel(int x, int y, int color)
 {
-    if (x >= DISP_WIDTH || y >= memHeight)
+    if (x >= activeBuf->width || y >= activeBuf->height)
     {
         return;
     }
-
-    int xByte = x/8;
-    int bitMask = 1<<(7-(x%8));
-    if (color)
-    {
-        pMem[y][xByte] |= bitMask;
-    }
-    else
-    {
-        pMem[y][xByte] &= ~bitMask;
-    }
+    uchar *pBuf = activeBuf->buf + y*activeBuf->memWidth + x/8;
+    x = x & 7;
+    *pBuf = (*pBuf & maskLutInv[x]) | (-(color^inverseColor) & maskLut[x]);
 }
 
-void ICACHE_FLASH_ATTR drawPixelInverse(int x, int y, char color)
-{
-    if (x >= DISP_WIDTH || y >= memHeight)
-    {
-        return;
-    }
-
-    int xByte = x/8;
-    int bitMask = 1<<(7-(x%8));
-    if (color)
-    {
-        pMem[y][xByte] &= ~bitMask;
-    }
-    else
-    {
-        pMem[y][xByte] |= bitMask;
-    }
-}
-
-void ICACHE_FLASH_ATTR drawLine(int x0, int y0, int x1, int y1, char color)
+void ICACHE_FLASH_ATTR drawLine(int x0, int y0, int x1, int y1, int color)
 {
     int dx = abs(x1-x0), sx = x0<x1 ? 1 : -1;
     int dy = abs(y1-y0), sy = y0<y1 ? 1 : -1;
@@ -308,7 +239,7 @@ void ICACHE_FLASH_ATTR drawLine(int x0, int y0, int x1, int y1, char color)
     }
 }
 
-void ICACHE_FLASH_ATTR drawRect(int x0, int y0, int x1, int y1, char color)
+void ICACHE_FLASH_ATTR drawRect(int x0, int y0, int x1, int y1, int color)
 {
     int x, y;
     int width = x1-x0+1;

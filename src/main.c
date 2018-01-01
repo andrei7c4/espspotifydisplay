@@ -19,6 +19,7 @@
 #include "icons.h"
 #include "strlib.h"
 #include "graphics.h"
+#include "animations.h"
 #include "display.h"
 #include "mpu6500.h"
 
@@ -27,12 +28,17 @@
 char authBasicStr[100] = "";
 extern char auth_code[];
 
-TrackInfo curTrack = {{0,0},{0,0},0,0,0};
+LOCAL TrackInfo curTrack = {{0,0},{0,0},0,0,0};
 
 LOCAL void ICACHE_FLASH_ATTR trackInfoFree(TrackInfo *track)
 {
 	os_free(track->name);
 	strListClear(&track->artists);
+}
+
+int ICACHE_FLASH_ATTR curTrackIsPlaying(void)
+{
+	return curTrack.isPlaying;
 }
 
 
@@ -43,7 +49,6 @@ LOCAL os_timer_t progressTmr;
 LOCAL os_timer_t buttonsTmr;
 LOCAL os_timer_t screenSaverTmr;
 LOCAL os_timer_t accelTmr;
-extern os_timer_t scrollTmr;
 
 #define HTTP_RX_BUF_SIZE	8192
 char httpMsgRxBuf[HTTP_RX_BUF_SIZE];
@@ -166,7 +171,6 @@ void user_init(void)
 	os_timer_disarm(&progressTmr);
 	os_timer_setfn(&progressTmr, (os_timer_func_t*)progressTmrCb, NULL);
 
-	os_timer_disarm(&scrollTmr);
 	os_timer_disarm(&buttonsTmr);
 	os_timer_setfn(&buttonsTmr, (os_timer_func_t*)buttonsScanTmrCb, NULL);
 
@@ -179,8 +183,8 @@ void user_init(void)
 	//uart_init(BIT_RATE_115200, BIT_RATE_115200);
 	uart_init(BIT_RATE_921600, BIT_RATE_921600);
 
-	dispSetActiveMemBuf(MainMemBuf);
-	dispMemClearAll();
+	activeBuf = &MainGfxBuf;
+	activeBufClearAll();
 
 //configInit(&config);
 //configWrite(&config);
@@ -549,8 +553,8 @@ LOCAL void ICACHE_FLASH_ATTR pollCurTrackTmrCb(void)
 
 LOCAL void ICACHE_FLASH_ATTR updateTrackProgress(int progress, int duration)
 {
-	dispSetActiveMemBuf(MainMemBuf);
-	dispMemClearProgBar();
+	activeBuf = &MainGfxBuf;
+	activeBufClearProgBar();
 
 	char timeStr[7];
 	int minutes = progress / 60;
@@ -766,50 +770,62 @@ LOCAL void ICACHE_FLASH_ATTR parseApiReply(void)
 				if (wstrcmp(curTrack.name.str, track.name.str))
 				{
 					debug("new track\n");
-					void (*dispUpdateFunc)(void);
-					if (config.scrollEn)
-					{
-						dispUpdateFunc = scrollTitle;
-						dispSetActiveMemBuf(TitleMemBuf);
-						dispMemClearAll();
-					}
-					else
-					{
-						dispUpdateFunc = dispUpdateTitle;
-						dispSetActiveMemBuf(MainMemBuf);
-						dispMemClearTitle();
-					}
-					drawStr(&arial13b, 0, 0, track.name.str, track.name.length);
+
+					const Font *trackFont = &arial13b;
+					GfxBufAlloc(&TitleLabel.buf, strWidth(trackFont, track.name.str));
+					activeBuf = &TitleLabel.buf;
+					drawStr(trackFont, 0, 0, track.name.str, track.name.length);
 
 					if (!strListEqual(&curTrack.artists, &track.artists))
 					{
 						debug("new artist\n");
-						int textPos;
-						if (config.scrollEn)
+
+						const Font *artistFont = &arial13;
+						GfxBufAlloc(&ArtistLabel.buf, strListWidth(artistFont, &track.artists, L", "));
+						activeBuf = &ArtistLabel.buf;
+						strListDraw(artistFont, 0, 0, &track.artists, L", ");
+
+						if (config.scrollMode & eVScroll)
 						{
-							dispUpdateFunc = scrollTitleArtist;
-							dispSetActiveMemBuf(ArtistMemBuf);
-							dispMemClearAll();
-							textPos = 0;
+							TitleLabel.scrollEn = TRUE;
+							ArtistLabel.scrollEn = TRUE;
+							vScrollStart();
 						}
 						else
 						{
-							dispUpdateFunc = dispUpdateTitleArtist;
-							dispSetActiveMemBuf(MainMemBuf);
-							dispMemClearArtist();
-							textPos = ARTIST_OFFSET;
+							scrollStop();
+							GfxBufCopy(&MainGfxBuf, &TitleLabel.buf, TitleLabel.offset);
+							dispUpdate(TitleLabel.offset, TitleLabel.buf.height);
+
+							GfxBufCopy(&MainGfxBuf, &ArtistLabel.buf, ArtistLabel.offset);
+							dispUpdate(ArtistLabel.offset, ArtistLabel.buf.height);
+							if (config.scrollMode & eHScroll)
+							{
+								hScrollStart();
+							}
 						}
-						StrBuf separator;
-						ushort sepStr[] = {',', ' ', '\0'};
-						separator.str = sepStr;
-						separator.length = NELEMENTS(sepStr)-1;
-						strListDraw(&arial13, 0, textPos, &track.artists, &separator);
 					}
 					else
 					{
 						debug("same artist\n");
+
+						if (config.scrollMode & eVScroll)
+						{
+							TitleLabel.scrollEn = TRUE;
+							//ArtistLabel.scrollEn = FALSE;
+							vScrollStart();
+						}
+						else
+						{
+							scrollStop();
+							GfxBufCopy(&MainGfxBuf, &TitleLabel.buf, TitleLabel.offset);
+							dispUpdate(TitleLabel.offset, TitleLabel.buf.height);
+							if (config.scrollMode & eHScroll)
+							{
+								hScrollStart();
+							}
+						}
 					}
-					dispUpdateFunc();
 					wakeupDisplay();
 				}
 				else
@@ -818,6 +834,10 @@ LOCAL void ICACHE_FLASH_ATTR parseApiReply(void)
 					if (!curTrack.isPlaying && track.isPlaying)
 					{
 						wakeupDisplay();
+						if (config.scrollMode & eHScroll)
+						{
+							hScrollStart();
+						}
 					}
 				}
 
