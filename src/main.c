@@ -32,7 +32,7 @@ LOCAL TrackInfo curTrack = {{0,0},{0,0},0,0,0};
 
 LOCAL void ICACHE_FLASH_ATTR trackInfoFree(TrackInfo *track)
 {
-	os_free(track->name);
+	os_free(track->name.str);
 	strListClear(&track->artists);
 }
 

@@ -16,7 +16,7 @@ typedef struct StrList StrList;
 
 struct StrListItem
 {
-    const ushort *str;
+    ushort *str;
     int length;
     StrListItem *next;
 };
@@ -27,7 +27,7 @@ struct StrList
     int count;
 };
 
-void strListAppend(StrList *list, const ushort *str, int length);
+void strListAppend(StrList *list, ushort *str, int length);
 void strListDraw(const Font *font, int x, int y, StrList *list, const ushort *separator);
 int strListEqual(StrList *list1, StrList *list2);
 void strListClear(StrList *list);

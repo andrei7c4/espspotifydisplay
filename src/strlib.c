@@ -18,7 +18,7 @@ LOCAL int charYoffset(const Font *font, ushort ch);
 LOCAL int strLength(const ushort *str);
 
 
-LOCAL StrListItem* ICACHE_FLASH_ATTR allocStrListItem(const ushort *str, int length)
+LOCAL StrListItem* ICACHE_FLASH_ATTR allocStrListItem(ushort *str, int length)
 {
     StrListItem *item = (StrListItem*)os_malloc(sizeof(StrListItem));
     if (item)
@@ -30,7 +30,7 @@ LOCAL StrListItem* ICACHE_FLASH_ATTR allocStrListItem(const ushort *str, int len
     return item;
 }
 
-void ICACHE_FLASH_ATTR strListAppend(StrList *list, const ushort *str, int length)
+void ICACHE_FLASH_ATTR strListAppend(StrList *list, ushort *str, int length)
 {
 	StrListItem *item = allocStrListItem(str, length);
     if (!item)
