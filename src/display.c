@@ -2,14 +2,23 @@
 #include <os_type.h>
 #include "graphics.h"
 #include "SSD1322.h"
+#include "SH1106.h"
 #include "display.h"
 
 
-extern void SSD1322_cpyMemBuf(uchar *mem, int memWidth, int memRow, uchar dispRow, int height);
-
 void ICACHE_FLASH_ATTR dispUpdate(int row, int height)
 {
+#if DISP_TYPE == 1322
 	SSD1322_cpyMemBuf(MainGfxBuf.buf, MainGfxBuf.memWidth, row, row, height);
+#elif DISP_TYPE == 1106
+	int pages = height/8;
+	int mod = row % 8;
+	if (mod)
+	{
+		pages++;
+	}
+	SH1106_cpyMemBuf(MainGfxBuf.buf, MainGfxBuf.memWidth, row-mod, row/8, pages);
+#endif
 }
 
 void ICACHE_FLASH_ATTR dispUpdateFull(void)
@@ -94,18 +103,28 @@ LOCAL void ICACHE_FLASH_ATTR verticalSqueezeTmrCb(void)
 	}
 }
 
-void ICACHE_FLASH_ATTR dispVerticalSqueezeStart(void)
+void ICACHE_FLASH_ATTR dispSmoothTurnOff(void)
 {
+#if DISP_TYPE == 1322
 	squeezeRow = 0;
 	os_timer_disarm(&dimmingTmr);
 	os_timer_setfn(&dimmingTmr, (os_timer_func_t *)verticalSqueezeTmrCb, NULL);
 	os_timer_arm(&dimmingTmr, 10, 1);
+#elif DISP_TYPE == 1106
+	// squeezing effects are not implement for SH1106 yet
+	// so just turn the display off
+	SH1106_setOnOff(stateOff);
+#endif
 }
 
-LOCAL void ICACHE_FLASH_ATTR SSD1322_constrastCtrlTmrCb(void)
+LOCAL void ICACHE_FLASH_ATTR constrastCtrlTmrCb(void)
 {
 	contrastCurValue += contrastIncValue;
+#if DISP_TYPE == 1322
 	SSD1322_setContrast(contrastCurValue);
+#elif DISP_TYPE == 1106
+	SH1106_setContrast(contrastCurValue);
+#endif
 	if (contrastCurValue != contrastSetPointValue)
 	{
 		os_timer_arm(&dimmingTmr, contrastCtrlTrmInt, 0);
@@ -115,12 +134,12 @@ LOCAL void ICACHE_FLASH_ATTR SSD1322_constrastCtrlTmrCb(void)
 void ICACHE_FLASH_ATTR dispDimmingStart(void)
 {
 	os_timer_disarm(&dimmingTmr);
-	os_timer_setfn(&dimmingTmr, (os_timer_func_t *)SSD1322_constrastCtrlTmrCb, NULL);
+	os_timer_setfn(&dimmingTmr, (os_timer_func_t *)constrastCtrlTmrCb, NULL);
 	contrastCurValue = 254;
 	contrastSetPointValue = 0;
 	contrastIncValue = -2;
 	contrastCtrlTrmInt = 15;
-	SSD1322_constrastCtrlTmrCb();
+	constrastCtrlTmrCb();
 	displayState = stateDimmed;
 }
 
@@ -132,12 +151,15 @@ void ICACHE_FLASH_ATTR dispUndimmStart(void)
 	case stateOn: return;
 		break;
 	case stateOff:
-		//SSD1322_setGrayLevel(180);
+#if DISP_TYPE == 1322
 		SSD1322_setOnOff(stateOn);
+#elif DISP_TYPE == 1106
+		SH1106_setOnOff(stateOn);
+#endif
 		// fallthrough
 	case stateDimmed:
 		os_timer_disarm(&dimmingTmr);
-		os_timer_setfn(&dimmingTmr, (os_timer_func_t *)SSD1322_constrastCtrlTmrCb, NULL);
+		os_timer_setfn(&dimmingTmr, (os_timer_func_t *)constrastCtrlTmrCb, NULL);
 		//contrastCurValue = 0;
 		contrastSetPointValue = 254;
 		contrastIncValue = 2;
@@ -148,7 +170,7 @@ void ICACHE_FLASH_ATTR dispUndimmStart(void)
 		}
 		else
 		{
-			SSD1322_constrastCtrlTmrCb();
+			constrastCtrlTmrCb();
 		}
 		displayState = stateOn;
 		break;
@@ -158,6 +180,7 @@ void ICACHE_FLASH_ATTR dispUndimmStart(void)
 
 void ICACHE_FLASH_ATTR dispSetOrientation(Orientation orientation)
 {
+#if DISP_TYPE == 1322
 	switch (orientation)
 	{
 	case orient0deg:
@@ -168,6 +191,20 @@ void ICACHE_FLASH_ATTR dispSetOrientation(Orientation orientation)
 		break;
 	default: return;
 	}
+#elif DISP_TYPE == 1106
+	switch (orientation)
+	{
+	case orient0deg:
+		SH1106_setSegmentRemap(eNormalDir);
+		SH1106_setComOutScanDir(eScanFrom0);
+		break;
+	case orient180deg:
+		SH1106_setSegmentRemap(eReverseDir);
+		SH1106_setComOutScanDir(eScanTo0);
+		break;
+	default: return;
+	}
+#endif
 	dispUpdateFull();
 	dispOrient = orientation;
 }

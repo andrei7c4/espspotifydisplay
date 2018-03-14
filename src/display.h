@@ -1,6 +1,22 @@
 #ifndef SRC_DISPLAY_H_
 #define SRC_DISPLAY_H_
 
+#include "hwconf.h"
+
+#if DISP_TYPE == 1322
+#define DISP_WIDTH		256
+#elif DISP_TYPE == 1106
+#define DISP_WIDTH		128
+#else
+#error "Only SSD1322 and SH1106 based displays are supported"
+#endif
+
+#define DISP_HEIGHT		64
+#define DISP_MEMWIDTH	(DISP_WIDTH/8)
+
+#define CONTRAST_LEVEL_INIT		0
+
+
 typedef enum{
 	stateOff,
 	stateDimmed,
@@ -21,7 +37,7 @@ void dispUpdateProgBar(void);
 
 
 void dispDimmingStart(void);
-void dispVerticalSqueezeStart(void);
+void dispSmoothTurnOff(void);
 void dispUndimmStart(void);
 
 void dispSetOrientation(Orientation orientation);

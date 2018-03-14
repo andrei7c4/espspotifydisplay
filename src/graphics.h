@@ -3,9 +3,6 @@
 
 #include "typedefs.h"
 
-#define DISP_HEIGHT		64
-#define DISP_WIDTH		256
-#define DISP_MEMWIDTH	(DISP_WIDTH/8)
 
 #define TITLE_OFFSET	0
 #define TITLE_HEIGHT	20

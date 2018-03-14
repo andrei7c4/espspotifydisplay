@@ -7,7 +7,6 @@
 #include "drivers/spi.h"
 #include "SSD1322.h"
 #include "common.h"
-#include "graphics.h"
 
 
 typedef enum{
@@ -49,7 +48,7 @@ typedef enum{
 
 // Adapted from Espressif example:
 // http://bbs.espressif.com/viewtopic.php?f=31&t=1346
-void SSD1322_write(uchar low_8bit, uchar high_bit)
+LOCAL void SSD1322_write(uchar low_8bit, uchar high_bit)
 {
 	uint regvalue;
 	uchar bytetemp;
@@ -94,7 +93,7 @@ LOCAL void ICACHE_FLASH_ATTR SSD1322_setColumnAddr(uchar addr)
 	SSD1322_write(0x5b, eData);
 }
 
-void ICACHE_FLASH_ATTR SSD1322_setStartLine(uchar line)
+LOCAL void ICACHE_FLASH_ATTR SSD1322_setStartLine(uchar line)
 {
 	SSD1322_write(REG_START_LINE, eCmd);
 	SSD1322_write(line, eData);

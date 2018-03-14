@@ -10,6 +10,7 @@
 #include <gpio.h>
 #include "drivers/uart.h"
 #include "drivers/spi.h"
+#include "drivers/i2c_bitbang.h"
 #include "config.h"
 #include "debug.h"
 #include "httpreq.h"
@@ -21,7 +22,10 @@
 #include "graphics.h"
 #include "animations.h"
 #include "display.h"
+#include "SSD1322.h"
+#include "SH1106.h"
 #include "mpu6500.h"
+#include "hwconf.h"
 
 
 
@@ -131,12 +135,37 @@ typedef enum{
 	Button2
 }Button;
 
-LOCAL Button adcValToButton(uint16 adcVal)
+#if defined BUTTONS_ON_ADC
+LOCAL Button ICACHE_FLASH_ATTR adcValToButton(uint16 adcVal)
 {
 	if (adcVal >= 768) return NotPressed;
 	if (adcVal >= 256) return Button1;
 	return Button2;
 }
+#elif defined BUTTON_ON_GPIO0
+LOCAL Button ICACHE_FLASH_ATTR readGpio0ButtonState(void)
+{
+	static int pressed = 0;
+	Button state = NotPressed;
+	if (GPIO_INPUT_GET(0) == 0)
+	{
+		pressed++;
+	}
+	else if (pressed > 0)
+	{
+		if (pressed >= 10)	// pressed for >= 1s
+		{
+			state = Button2;
+		}
+		else
+		{
+			state = Button1;
+		}
+		pressed = 0;
+	}
+	return state;
+}
+#endif
 
 
 void ICACHE_FLASH_ATTR initAuthBasicStr(void)
@@ -160,7 +189,18 @@ void ICACHE_FLASH_ATTR initAuthBasicStr(void)
 }
 
 
-void user_init(void)
+#if DISP_TYPE == 1106
+void ICACHE_FLASH_ATTR SH1106_initDone(void)
+{
+	debug("SH1106_initDone\n");
+	drawSpotifyLogo();
+	dispUpdateFull();
+	wakeupDisplay();
+}
+#endif
+
+
+void ICACHE_FLASH_ATTR user_init(void)
 {
 	os_timer_disarm(&gpTmr);
 	os_timer_disarm(&httpRxTmr);
@@ -191,48 +231,67 @@ void user_init(void)
 	configRead(&config);
 
 	initAuthBasicStr();
-	
+
 	curTrack.name.str = (ushort*)os_malloc(sizeof(ushort));
 	curTrack.name.str[0] = 0;
 
 	debug("Built on %s %s\n", __DATE__, __TIME__);
 	debug("SDK version %s\n", system_get_sdk_version());
 	debug("free heap %d\n", system_get_free_heap_size());
-    
+
 	gpio_init();
 
+#if (DISP_TYPE == 1322) || defined (MPU_ON_SPI)
 	spi_init(HSPI, 20, 5, FALSE);	// spi clock = 800 kHz
 
 	// same spi settings for SSD1322 and MPU6500
 	// data is valid on clock trailing edge
 	// clock is high when inactive
 	spi_mode(HSPI, 1, 1);
+#endif
 
+#if defined (MPU_ON_SPI)
 	if (mpu6500_init() == OK)
 	{
 		// accelerometer found -> read values twice per second
 		os_timer_arm(&accelTmr, 500, 1);
 	}
+	else
+	{
+		debug("mpu6500_init failed\n");
+	}
+#endif
 
+#if DISP_TYPE == 1322
 	SSD1322_init();
-
 	drawSpotifyLogo();
 	dispUpdateFull();
 	wakeupDisplay();
-	
+#elif DISP_TYPE == 1106
+	i2c_gpio_init();
+	SH1106_init(TRUE, SH1106_initDone, FALSE);
+#endif
+
 		//wifi_set_opmode(NULL_MODE);
 		//return;
 
 	setAppState(stateConnectToAp);
 	wifi_set_opmode(STATION_MODE);
 	connectToWiFiAP();
-    
+
+#if defined BUTTONS_ON_ADC
 	if (adcValToButton(system_adc_read()) == NotPressed)
 	{
 		// enable buttons scan
 		os_timer_arm(&buttonsTmr, 100, 1);
 	}
 	//else pull-ups are probably not installed -> don't scan buttons
+#elif defined BUTTON_ON_GPIO0
+	PIN_FUNC_SELECT(PERIPHS_IO_MUX_GPIO0_U, FUNC_GPIO0);
+	GPIO_DIS_OUTPUT(0);
+
+	os_timer_arm(&buttonsTmr, 100, 1);
+#endif
 }
 
 LOCAL void ICACHE_FLASH_ATTR connectToWiFiAP(void)
@@ -249,7 +308,7 @@ LOCAL void ICACHE_FLASH_ATTR connectToWiFiAP(void)
 LOCAL uint8 ICACHE_FLASH_ATTR getWiFiStatusAndIp(uint32 *addr)
 {
 	struct ip_info ipconfig;
-	memset(&ipconfig, 0, sizeof(ipconfig));
+	os_memset(&ipconfig, 0, sizeof(ipconfig));
 	uint8 status = wifi_station_get_connect_status();
 	if (status == STATION_GOT_IP)
 	{
@@ -901,9 +960,14 @@ LOCAL void ICACHE_FLASH_ATTR parseApiReply(void)
 LOCAL void ICACHE_FLASH_ATTR buttonsScanTmrCb(void)
 {
 	static Button prevButtons = NotPressed;
+	Button buttons = NotPressed;
+#if defined BUTTONS_ON_ADC
 	uint16 adcVal = system_adc_read();
-	Button buttons = adcValToButton(adcVal);
+	buttons = adcValToButton(adcVal);
 	//debug("adcVal %d, buttons %d\n", adcVal, buttons);
+#elif defined BUTTON_ON_GPIO0
+	buttons = readGpio0ButtonState();
+#endif
 	if (prevButtons != buttons)
 	{
 		prevButtons = buttons;
@@ -947,7 +1011,7 @@ LOCAL void ICACHE_FLASH_ATTR screenSaverTmrCb(void)
 		}
 		else
 		{
-			dispVerticalSqueezeStart();
+			dispSmoothTurnOff();
 		}
 		break;
 	}

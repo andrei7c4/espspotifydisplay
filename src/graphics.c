@@ -6,6 +6,7 @@
 #include "typedefs.h"
 #include "common.h"
 #include "conv.h"
+#include "display.h"
 #include "graphics.h"
 
 
