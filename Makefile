@@ -216,7 +216,7 @@ flash:
 	$(ESPTOOL) -p $(ESPPORT) -b $(BAUD) write_flash $(flashimageoptions) 0x00000 $(FW_BASE)/0x00000.bin 0x10000 $(FW_BASE)/0x10000.bin
 
 flashall:
-	$(ESPTOOL) -p $(ESPPORT) -b $(BAUD) write_flash $(flashimageoptions) 0x00000 $(FW_BASE)/0x00000.bin 0x10000 $(FW_BASE)/0x10000.bin 0x5b000 $(FW_BASE)/0x5b000.bin
+	$(ESPTOOL) -p $(ESPPORT) -b $(BAUD) write_flash $(flashimageoptions) 0x00000 $(FW_BASE)/0x00000.bin 0x10000 $(FW_BASE)/0x10000.bin 0x6c000 $(FW_BASE)/0x6c000.bin
 
 # ===============================================================
 # From http://bbs.espressif.com/viewtopic.php?f=10&t=305
