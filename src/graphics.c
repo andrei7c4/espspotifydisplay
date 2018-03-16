@@ -22,8 +22,29 @@ GfxBuf TempGfxBuf= {bufTemp, DISP_MEMWIDTH, DISP_WIDTH, 1};
 
 GfxBuf *activeBuf = &MainGfxBuf;
 
-Label TitleLabel = {{NULL, 0, 0, TITLE_HEIGHT}, TITLE_OFFSET, 0,0,0};
-Label ArtistLabel = {{NULL, 0, 0, ARTIST_HEIGHT}, ARTIST_OFFSET, 0,0,0};
+Label TitleLabel = {0};
+Label ArtistLabel = {0};
+Label AlbumLabel = {0};
+
+void ICACHE_FLASH_ATTR setLabelDimensions(int showAlbum)
+{
+	if (showAlbum)
+	{
+		TitleLabel.buf.height = 17;
+		ArtistLabel.buf.height = 17;
+		AlbumLabel.buf.height = 17;
+	}
+	else
+	{
+		TitleLabel.buf.height = 20;
+		ArtistLabel.buf.height = 20;
+		AlbumLabel.buf.height = 0;
+	}
+
+	TitleLabel.offset = 0;
+	ArtistLabel.offset = TitleLabel.buf.height;
+	AlbumLabel.offset = showAlbum ? (ArtistLabel.offset + ArtistLabel.buf.height) : 0;
+}
 
 void ICACHE_FLASH_ATTR GfxBufAlloc(GfxBuf *buf, int width)
 {
@@ -89,7 +110,7 @@ void ICACHE_FLASH_ATTR activeBufFill(uchar data, int row, int height)
     }
 }
 
-LOCAL void ICACHE_FLASH_ATTR activeBufClear(int row, int height)
+void ICACHE_FLASH_ATTR activeBufClear(int row, int height)
 {
 	activeBufFill(inverseColor ? 0xFF : 0, row, height);
 }
@@ -101,7 +122,7 @@ void ICACHE_FLASH_ATTR activeBufClearAll(void)
 
 void ICACHE_FLASH_ATTR activeBufClearProgBar(void)
 {
-	activeBufClear(BLANK_SPACE_OFFSET, BLANK_SPACE_HEIGHT+PROGBAR_HEIGHT);
+	activeBufClear(PROGBAR_OFFSET, PROGBAR_HEIGHT);
 }
 
 

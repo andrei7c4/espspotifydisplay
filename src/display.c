@@ -28,7 +28,17 @@ void ICACHE_FLASH_ATTR dispUpdateFull(void)
 
 void ICACHE_FLASH_ATTR dispUpdateProgBar(void)
 {
-	dispUpdate(BLANK_SPACE_OFFSET, BLANK_SPACE_HEIGHT+PROGBAR_HEIGHT);
+	dispUpdate(PROGBAR_OFFSET, PROGBAR_HEIGHT);
+}
+
+void ICACHE_FLASH_ATTR dispClearBlankSpace(int showAlbum)
+{
+	int blankOffset = showAlbum ? (AlbumLabel.offset + AlbumLabel.buf.height) :
+								  	  	 (ArtistLabel.offset + ArtistLabel.buf.height);
+	int blankHeight = PROGBAR_OFFSET - blankOffset;
+	activeBuf = &MainGfxBuf;
+	activeBufClear(blankOffset, blankHeight);
+	dispUpdate(blankOffset, blankHeight);
 }
 
 

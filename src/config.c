@@ -11,6 +11,8 @@ char auth_code[400] = "";
 
 Config config;
 
+LOCAL int sysRestart = FALSE;
+
 void ICACHE_FLASH_ATTR configInit(Config *config)
 {
 	os_memset(config, 0, sizeof(Config));
@@ -29,6 +31,7 @@ void ICACHE_FLASH_ATTR configInit(Config *config)
 	config->tokenExpireTs = 0;
 
 	config->scrollMode = eVHScroll;
+	config->showAlbum = TRUE;
     
     config->debugEn = TRUE;
 }
@@ -57,9 +60,7 @@ void ICACHE_FLASH_ATTR configWrite(Config *config)
 LOCAL int ICACHE_FLASH_ATTR resetConfig(const char *value, uint valueLen)
 {
 	configInit(&config);
-	os_printf("OK\n");
-	configWrite(&config);
-	system_restart();
+	sysRestart = TRUE;
 	return OK;
 }
 
@@ -109,26 +110,22 @@ LOCAL int ICACHE_FLASH_ATTR setIntParam(int *param, int min, int max, const char
 
 LOCAL int ICACHE_FLASH_ATTR setSsid(const char *value, uint valueLen)
 {
-	if (setParam(config.ssid, sizeof(config.ssid), value, valueLen) != OK)
+	if (setParam(config.ssid, sizeof(config.ssid), value, valueLen) == OK)
 	{
-		return ERROR;
+		sysRestart = TRUE;
+		return OK;
 	}
-	os_printf("OK\n");
-	configWrite(&config);
-	system_restart();
-	return OK;
+	return ERROR;
 }
 
 LOCAL int ICACHE_FLASH_ATTR setPass(const char *value, uint valueLen)
 {
-	if (setParam(config.pass, sizeof(config.pass), value, valueLen) != OK)
+	if (setParam(config.pass, sizeof(config.pass), value, valueLen) == OK)
 	{
-		return ERROR;
+		sysRestart = TRUE;
+		return OK;
 	}
-	os_printf("OK\n");
-	configWrite(&config);
-	system_restart();
-	return OK;
+	return ERROR;
 }
 
 LOCAL int ICACHE_FLASH_ATTR setClientId(const char *value, uint valueLen)
@@ -173,6 +170,16 @@ LOCAL int ICACHE_FLASH_ATTR setScroll(const char *value, uint valueLen)
 	return setIntParam((int*)&config.scrollMode, 0, 3, value, valueLen);
 }
 
+LOCAL int ICACHE_FLASH_ATTR setShowAlbum(const char *value, uint valueLen)
+{
+	if (setBoolParam(&config.showAlbum, value, valueLen) == OK)
+	{
+		sysRestart = TRUE;
+		return OK;
+	}
+	return ERROR;
+}
+
 LOCAL int ICACHE_FLASH_ATTR setDebug(const char *value, uint valueLen)
 {
 	return setBoolParam(&config.debugEn, value, valueLen);
@@ -193,6 +200,7 @@ CmdEntry commands[] = {
 	{"auth_code", setAuthCode},
 	{"poll", setPollInterval},
 	{"scroll", setScroll},
+	{"showalbum", setShowAlbum},
 	{"debug", setDebug},
 	{"reset", resetConfig},
 };
@@ -220,6 +228,10 @@ void ICACHE_FLASH_ATTR onUartCmdReceived(char* command, int length)
 			{
 				os_printf("OK\n");
 				configWrite(&config);
+				if (sysRestart)
+				{
+					system_restart();
+				}
 			}
 			else
 			{

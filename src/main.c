@@ -32,11 +32,12 @@
 char authBasicStr[100] = "";
 extern char auth_code[];
 
-LOCAL TrackInfo curTrack = {{0,0},{0,0},0,0,0};
+LOCAL TrackInfo curTrack = {0};
 
 LOCAL void ICACHE_FLASH_ATTR trackInfoFree(TrackInfo *track)
 {
 	os_free(track->name.str);
+	os_free(track->album.str);
 	strListClear(&track->artists);
 }
 
@@ -232,12 +233,21 @@ void ICACHE_FLASH_ATTR user_init(void)
 
 	initAuthBasicStr();
 
-	curTrack.name.str = (ushort*)os_malloc(sizeof(ushort));
-	curTrack.name.str[0] = 0;
-
 	debug("Built on %s %s\n", __DATE__, __TIME__);
 	debug("SDK version %s\n", system_get_sdk_version());
 	debug("free heap %d\n", system_get_free_heap_size());
+
+	os_memset(&curTrack, 0, sizeof(TrackInfo));
+	curTrack.name.str = (ushort*)os_malloc(sizeof(ushort));
+	curTrack.name.str[0] = 0;
+	curTrack.album.str = (ushort*)os_malloc(sizeof(ushort));
+	curTrack.album.str[0] = 0;
+
+	os_memset(&TitleLabel, 0, sizeof(Label));
+	os_memset(&ArtistLabel, 0, sizeof(Label));
+	os_memset(&AlbumLabel, 0, sizeof(Label));
+	setLabelDimensions(config.showAlbum);
+
 
 	gpio_init();
 
@@ -808,6 +818,7 @@ LOCAL void ICACHE_FLASH_ATTR parseAuthReply(void)
 
 LOCAL void ICACHE_FLASH_ATTR parseApiReply(void)
 {
+	static int firstReply = TRUE;
 	setAppState(stateReplyReceived);
 
 	debug("parseApiReply, len %d\n", httpRxMsgCurLen);
@@ -826,7 +837,11 @@ LOCAL void ICACHE_FLASH_ATTR parseApiReply(void)
 			os_memset(&track, 0, sizeof(TrackInfo));
 			if (parseTrackInfo(json, jsonLen, &track) == OK)
 			{
-				if (wstrcmp(curTrack.name.str, track.name.str))
+				int trackChanged = wstrcmp(curTrack.name.str, track.name.str);
+				int artistChanged = !strListEqual(&curTrack.artists, &track.artists);
+				int albumChanged = wstrcmp(curTrack.album.str, track.album.str);
+
+				if (trackChanged)
 				{
 					debug("new track\n");
 
@@ -834,68 +849,81 @@ LOCAL void ICACHE_FLASH_ATTR parseApiReply(void)
 					GfxBufAlloc(&TitleLabel.buf, strWidth(trackFont, track.name.str));
 					activeBuf = &TitleLabel.buf;
 					drawStr(trackFont, 0, 0, track.name.str, track.name.length);
+				}
+				if (artistChanged)
+				{
+					debug("new artist\n");
 
-					if (!strListEqual(&curTrack.artists, &track.artists))
+					const Font *artistFont = &arial13;
+					GfxBufAlloc(&ArtistLabel.buf, strListWidth(artistFont, &track.artists, L", "));
+					activeBuf = &ArtistLabel.buf;
+					strListDraw(artistFont, 0, 0, &track.artists, L", ");
+				}
+				if (albumChanged)
+				{
+					debug("new album\n");
+
+					const Font *albumFont = &arial10;
+					GfxBufAlloc(&AlbumLabel.buf, strWidth(albumFont, track.album.str));
+					activeBuf = &AlbumLabel.buf;
+					drawStr(albumFont, 1, 0, track.album.str, track.album.length);
+				}
+
+				if (trackChanged || artistChanged || albumChanged)
+				{
+					if (firstReply)
 					{
-						debug("new artist\n");
+						firstReply = FALSE;
+						dispClearBlankSpace(config.showAlbum);
+					}
 
-						const Font *artistFont = &arial13;
-						GfxBufAlloc(&ArtistLabel.buf, strListWidth(artistFont, &track.artists, L", "));
-						activeBuf = &ArtistLabel.buf;
-						strListDraw(artistFont, 0, 0, &track.artists, L", ");
-
-						if (config.scrollMode & eVScroll)
+					if (config.scrollMode & eVScroll)
+					{
+						// start vertical scroll for changed labels
+						vScrollStart(trackChanged, artistChanged, albumChanged);
+					}
+					else	// vertical scroll disabled
+					{		// just draw changed labels
+						scrollStop();
+						if (trackChanged)
 						{
-							TitleLabel.scrollEn = TRUE;
-							ArtistLabel.scrollEn = TRUE;
-							vScrollStart();
-						}
-						else
-						{
-							scrollStop();
 							GfxBufCopy(&MainGfxBuf, &TitleLabel.buf, TitleLabel.offset);
 							dispUpdate(TitleLabel.offset, TitleLabel.buf.height);
-
+						}
+						if (artistChanged)
+						{
 							GfxBufCopy(&MainGfxBuf, &ArtistLabel.buf, ArtistLabel.offset);
 							dispUpdate(ArtistLabel.offset, ArtistLabel.buf.height);
-							if (config.scrollMode & eHScroll)
-							{
-								hScrollStart();
-							}
 						}
-					}
-					else
-					{
-						debug("same artist\n");
+						if (albumChanged)
+						{
+							GfxBufCopy(&MainGfxBuf, &AlbumLabel.buf, AlbumLabel.offset);
+							dispUpdate(AlbumLabel.offset, AlbumLabel.buf.height);
+						}
 
-						if (config.scrollMode & eVScroll)
+						if (config.scrollMode & eHScroll)
 						{
-							TitleLabel.scrollEn = TRUE;
-							//ArtistLabel.scrollEn = FALSE;
-							vScrollStart();
-						}
-						else
-						{
-							scrollStop();
-							GfxBufCopy(&MainGfxBuf, &TitleLabel.buf, TitleLabel.offset);
-							dispUpdate(TitleLabel.offset, TitleLabel.buf.height);
-							if (config.scrollMode & eHScroll)
-							{
-								hScrollStart();
-							}
+							// check if we are interrupting horizontal scroll
+							TitleLabel.scrollInt = (TitleLabel.scrollEn && !trackChanged);
+							ArtistLabel.scrollInt = (ArtistLabel.scrollEn && !artistChanged);
+							AlbumLabel.scrollInt = (AlbumLabel.scrollEn && !albumChanged);
+
+							// start/continue horizontal scroll if it is enabled and label width > display width
+							hScrollEnable();
 						}
 					}
+
 					wakeupDisplay();
 				}
-				else
+				else	// all the same
 				{
 					debug("same track\n");
-					if (!curTrack.isPlaying && track.isPlaying)
+					if (!curTrack.isPlaying && track.isPlaying)		// playback resumed
 					{
 						wakeupDisplay();
 						if (config.scrollMode & eHScroll)
 						{
-							hScrollStart();
+							hScrollEnable();
 						}
 					}
 				}

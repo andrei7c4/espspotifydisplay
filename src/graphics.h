@@ -4,18 +4,10 @@
 #include "typedefs.h"
 
 
-#define TITLE_OFFSET	0
-#define TITLE_HEIGHT	20
-
-#define ARTIST_OFFSET	20
-#define ARTIST_HEIGHT	20
-
 #define PROGBAR_OFFSET	53
 #define PROGBAR_HEIGHT	(DISP_HEIGHT-PROGBAR_OFFSET)
 
-#define BLANK_SPACE_OFFSET	(ARTIST_OFFSET+ARTIST_HEIGHT)
-#define BLANK_SPACE_HEIGHT	(PROGBAR_OFFSET-BLANK_SPACE_OFFSET)
-
+extern int inverseColor;
 
 struct GfxBuf_
 {
@@ -31,6 +23,7 @@ struct Label_
 	GfxBuf buf;
 	int offset;
 	int scrollEn;
+	int scrollInt;
 	int vScrollY;
 	int hScrollX;
 	int hScrollBit;
@@ -43,14 +36,15 @@ extern GfxBuf *activeBuf;
 
 extern Label TitleLabel;
 extern Label ArtistLabel;
+extern Label AlbumLabel;
 
-extern int inverseColor;
-
+void setLabelDimensions(int showAlbum);
 
 void GfxBufAlloc(GfxBuf *buf, int width);
 void GfxBufCopy(GfxBuf *dst, GfxBuf *src, int dstRow);
 
 void activeBufFill(uchar data, int row, int height);
+void activeBufClear(int row, int height);
 void activeBufClearAll(void);
 void activeBufClearProgBar(void);
 

@@ -38,11 +38,11 @@ typedef struct{
 	int pollInterval;
 
 	ScrollMode scrollMode;
+	int showAlbum;
     
     int debugEn;
 }Config;
 extern Config config;
-
 
 
 void configInit(Config *config);

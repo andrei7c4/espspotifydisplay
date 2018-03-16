@@ -130,6 +130,23 @@ int ICACHE_FLASH_ATTR parseTrackInfo(const char *json, int jsonLen, TrackInfo *t
 	if (!jumpToNextType(&state, 1, JSON_TYPE_PAIR_NAME, "item"))
 		return ERROR;
 
+	if (config.showAlbum)
+	{
+		if (!jumpToNextType(&state, 2, JSON_TYPE_PAIR_NAME, "album"))
+			return ERROR;
+
+		if ((track->album.length = getNextStringAllocUtf8(&state, 3, "name", &track->album.str)) == 0)
+			return ERROR;
+	}
+	else
+	{
+		track->album.str = (ushort*)os_malloc(sizeof(ushort));
+		track->album.str[0] = 0;
+	}
+
+	if (!jumpToNextType(&state, 2, JSON_TYPE_PAIR_NAME, "artists"))
+		return ERROR;
+
 	if (!jumpToNextType(&state, 3, JSON_TYPE_ARRAY, NULL))
 		return ERROR;
 

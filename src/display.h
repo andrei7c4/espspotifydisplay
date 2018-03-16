@@ -34,6 +34,7 @@ extern Orientation dispOrient;
 void dispUpdate(int row, int height);
 void dispUpdateFull(void);
 void dispUpdateProgBar(void);
+void dispClearBlankSpace(int showAlbum);
 
 
 void dispDimmingStart(void);

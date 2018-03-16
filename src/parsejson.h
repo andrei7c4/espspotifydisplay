@@ -8,6 +8,7 @@ typedef struct
 {
 	StrBuf name;
 	StrList artists;
+	StrBuf album;
 	int duration;
 	int progress;
 	int isPlaying;

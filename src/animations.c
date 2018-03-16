@@ -14,6 +14,8 @@ LOCAL int isScrolling = FALSE;
 extern int curTrackIsPlaying(void);
 
 
+LOCAL void hScrollStart(void);
+LOCAL void hScrollContinue(void);
 LOCAL void ICACHE_FLASH_ATTR scrollTmrCb(void (*scrollStep)(Label *))
 {
 	if (TitleLabel.scrollEn)
@@ -24,12 +26,23 @@ LOCAL void ICACHE_FLASH_ATTR scrollTmrCb(void (*scrollStep)(Label *))
 	{
 		scrollStep(&ArtistLabel);
 	}
-	if (!TitleLabel.scrollEn && !ArtistLabel.scrollEn)
+	if (AlbumLabel.scrollEn)
+	{
+		scrollStep(&AlbumLabel);
+	}
+	if (!TitleLabel.scrollEn && !ArtistLabel.scrollEn && !AlbumLabel.scrollEn)
 	{
 		scrollStop();		// scroll round done
-		if ((config.scrollMode & eHScroll) && curTrackIsPlaying())
+		if (config.scrollMode & eHScroll)
 		{
-			hScrollStart();
+			if (TitleLabel.scrollInt || ArtistLabel.scrollInt || AlbumLabel.scrollInt)
+			{
+				hScrollContinue();		// continue interrupted horizontal scroll
+			}
+			else if (curTrackIsPlaying())
+			{
+				hScrollStart();		// start a new scroll
+			}
 		}
 	}
 }
@@ -53,20 +66,26 @@ LOCAL void ICACHE_FLASH_ATTR vScrollStep(Label *label)
 	}
 }
 
-void ICACHE_FLASH_ATTR vScrollStart(void)
+void ICACHE_FLASH_ATTR vScrollStart(int scrollTitle, int scrollArtist, int scrollAlbum)
 {
-	if (TitleLabel.scrollEn)
+	if (scrollTitle || scrollArtist || scrollAlbum)
 	{
+		// check if we are interrupting horizontal scroll
+		TitleLabel.scrollInt = (TitleLabel.scrollEn && !scrollTitle);
+		ArtistLabel.scrollInt = (ArtistLabel.scrollEn && !scrollArtist);
+		AlbumLabel.scrollInt = (AlbumLabel.scrollEn && !scrollAlbum);
+
+		TitleLabel.scrollEn = scrollTitle;
 		TitleLabel.vScrollY = 0;
-	}
-	if (ArtistLabel.scrollEn)
-	{
+		ArtistLabel.scrollEn = scrollArtist;
 		ArtistLabel.vScrollY = 0;
+		AlbumLabel.scrollEn = scrollAlbum;
+		AlbumLabel.vScrollY = 0;
+		os_timer_disarm(&scrollTmr);
+		os_timer_setfn(&scrollTmr, (os_timer_func_t *)scrollTmrCb, vScrollStep);
+		os_timer_arm(&scrollTmr, VSCROLL_INTERVAL, 1);
+		isScrolling = TRUE;
 	}
-	os_timer_disarm(&scrollTmr);
-	os_timer_setfn(&scrollTmr, (os_timer_func_t *)scrollTmrCb, vScrollStep);
-	os_timer_arm(&scrollTmr, VSCROLL_INTERVAL, 1);
-	isScrolling = TRUE;
 }
 
 
@@ -121,23 +140,56 @@ LOCAL void ICACHE_FLASH_ATTR hScrollStep1(void)
 		ArtistLabel.hScrollX = MainGfxBuf.memWidth;
 		ArtistLabel.hScrollBit = 7;
 	}
+	if (AlbumLabel.scrollEn)
+	{
+		AlbumLabel.hScrollX = MainGfxBuf.memWidth;
+		AlbumLabel.hScrollBit = 7;
+	}
 	os_timer_setfn(&scrollTmr, (os_timer_func_t *)scrollTmrCb, hScrollStep);
 	os_timer_arm(&scrollTmr, HSCROLL_INTERVAL, 1);
 }
 
-void ICACHE_FLASH_ATTR hScrollStart(void)
+LOCAL void ICACHE_FLASH_ATTR hScrollStart(void)
 {
-	if (isScrolling)
-	{
-		return;
-	}
 	TitleLabel.scrollEn = (TitleLabel.buf.width > DISP_WIDTH);
 	ArtistLabel.scrollEn = (ArtistLabel.buf.width > DISP_WIDTH);
-	if (TitleLabel.scrollEn || ArtistLabel.scrollEn)
+	AlbumLabel.scrollEn = (AlbumLabel.buf.width > DISP_WIDTH);
+	if (TitleLabel.scrollEn || ArtistLabel.scrollEn || AlbumLabel.scrollEn)
 	{
 		os_timer_setfn(&scrollTmr, (os_timer_func_t *)hScrollStep1, NULL);
 		os_timer_arm(&scrollTmr, 5000, 0);
 		isScrolling = TRUE;
+	}
+}
+
+LOCAL void ICACHE_FLASH_ATTR hScrollContinue(void)
+{
+	TitleLabel.scrollEn = TitleLabel.scrollInt;
+	ArtistLabel.scrollEn = ArtistLabel.scrollInt;
+	AlbumLabel.scrollEn = AlbumLabel.scrollInt;
+	TitleLabel.scrollInt = FALSE;
+	ArtistLabel.scrollInt = FALSE;
+	AlbumLabel.scrollInt = FALSE;
+	if (TitleLabel.scrollEn || ArtistLabel.scrollEn || AlbumLabel.scrollEn)
+	{
+		os_timer_setfn(&scrollTmr, (os_timer_func_t *)scrollTmrCb, hScrollStep);
+		os_timer_arm(&scrollTmr, HSCROLL_INTERVAL, 1);
+		isScrolling = TRUE;
+	}
+}
+
+void ICACHE_FLASH_ATTR hScrollEnable(void)
+{
+	if (!isScrolling)
+	{
+		if (TitleLabel.scrollInt || ArtistLabel.scrollInt || AlbumLabel.scrollInt)
+		{
+			hScrollContinue();		// continue interrupted horizontal scroll
+		}
+		else
+		{
+			hScrollStart();		// start a new scroll
+		}
 	}
 }
 
