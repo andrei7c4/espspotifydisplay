@@ -191,7 +191,7 @@ void ICACHE_FLASH_ATTR SSD1322_cpyMemBuf(uchar *mem, int memWidth, int memRow, u
 }
 
 
-void ICACHE_FLASH_ATTR SSD1322_init(void)
+void ICACHE_FLASH_ATTR SSD1322_init(Orientation orientation, int setDispOn)
 {
 	// reset pin as GPIO
 	PIN_FUNC_SELECT(RST_GPIO_MUX, RST_GPIO_FUNC);
@@ -224,7 +224,14 @@ void ICACHE_FLASH_ATTR SSD1322_init(void)
     
     SSD1322_setStartLine(0);
     
-	SSD1322_setRemap(0x14, 0x11);	// 0 deg orientation
+    if (orientation == orient0deg)
+    {
+    	SSD1322_setRemap(0x14, 0x11);
+    }
+    else
+    {
+    	SSD1322_setRemap(0x06, 0x11);	// 180 deg orientation
+    }
     
 	SSD1322_write(REG_INTERNAL_VDD_CTRL, eCmd);
 	SSD1322_write(0x01, eData);     // enable internal Vdd regulator
@@ -258,6 +265,10 @@ void ICACHE_FLASH_ATTR SSD1322_init(void)
     
 	SSD1322_setGrayLevel(180);      // set GS15 to max
 	
-	//SSD1322_setOnOff(stateOn);
+	if (setDispOn)
+	{
+		SSD1322_setOnOff(stateOn);
+	}
+
 	//SSD1322_write(REG_PIXELS_ON, eCmd); // full on
 }

@@ -10,20 +10,55 @@ void ICACHE_FLASH_ATTR dispUpdate(int row, int height)
 {
 #if DISP_TYPE == 1322
 	SSD1322_cpyMemBuf(MainGfxBuf.buf, MainGfxBuf.memWidth, row, row, height);
-#elif DISP_TYPE == 1106
+#elif DISP_TYPE == 1106 || DISP_TYPE == 1306
 	int pages = height/8;
+	if (height%8)
+	{
+		pages++;
+	}
 	int mod = row % 8;
 	if (mod)
 	{
 		pages++;
 	}
-	SH1106_cpyMemBuf(MainGfxBuf.buf, MainGfxBuf.memWidth, row-mod, row/8, pages);
+	SH1106_SSD1306_cpyMemBuf(MainGfxBuf.buf, MainGfxBuf.memWidth, row-mod, row/8, pages);
 #endif
 }
 
 void ICACHE_FLASH_ATTR dispUpdateFull(void)
 {
 	dispUpdate(0, DISP_HEIGHT);
+}
+
+// combined update is more efficient on SSD1306 and SH1106
+void ICACHE_FLASH_ATTR dispUpdateLabels(int title, int artist, int album)
+{
+	int labels = title | (artist << 1) | (album << 2);
+	switch (labels)
+	{
+	case 1:		// title only
+		dispUpdate(TitleLabel.offset, TitleLabel.buf.height);
+		break;
+	case 2:		// artist only
+		dispUpdate(ArtistLabel.offset, ArtistLabel.buf.height);
+		break;
+	case 3:		// title & artist
+		dispUpdate(TitleLabel.offset, ArtistLabel.offset + ArtistLabel.buf.height);
+		break;
+	case 4:		// album only
+		dispUpdate(AlbumLabel.offset, AlbumLabel.buf.height);
+		break;
+	case 5:		// title & album
+		dispUpdate(TitleLabel.offset, TitleLabel.buf.height);
+		dispUpdate(AlbumLabel.offset, AlbumLabel.buf.height);
+		break;
+	case 6:		// artist & album
+		dispUpdate(ArtistLabel.offset, AlbumLabel.offset + AlbumLabel.buf.height);
+		break;
+	case 7:		// title & artist & album
+		dispUpdate(TitleLabel.offset, AlbumLabel.offset + AlbumLabel.buf.height);
+		break;
+	}
 }
 
 void ICACHE_FLASH_ATTR dispUpdateProgBar(void)
@@ -120,10 +155,10 @@ void ICACHE_FLASH_ATTR dispSmoothTurnOff(void)
 	os_timer_disarm(&dimmingTmr);
 	os_timer_setfn(&dimmingTmr, (os_timer_func_t *)verticalSqueezeTmrCb, NULL);
 	os_timer_arm(&dimmingTmr, 10, 1);
-#elif DISP_TYPE == 1106
+#elif DISP_TYPE == 1106 || DISP_TYPE == 1306
 	// squeezing effects are not implement for SH1106 yet
 	// so just turn the display off
-	SH1106_setOnOff(stateOff);
+	SH1106_SSD1306_setOnOff(stateOff);
 #endif
 }
 
@@ -132,8 +167,8 @@ LOCAL void ICACHE_FLASH_ATTR constrastCtrlTmrCb(void)
 	contrastCurValue += contrastIncValue;
 #if DISP_TYPE == 1322
 	SSD1322_setContrast(contrastCurValue);
-#elif DISP_TYPE == 1106
-	SH1106_setContrast(contrastCurValue);
+#elif DISP_TYPE == 1106 || DISP_TYPE == 1306
+	SH1106_SSD1306_setContrast(contrastCurValue);
 #endif
 	if (contrastCurValue != contrastSetPointValue)
 	{
@@ -163,8 +198,8 @@ void ICACHE_FLASH_ATTR dispUndimmStart(void)
 	case stateOff:
 #if DISP_TYPE == 1322
 		SSD1322_setOnOff(stateOn);
-#elif DISP_TYPE == 1106
-		SH1106_setOnOff(stateOn);
+#elif DISP_TYPE == 1106 || DISP_TYPE == 1306
+		SH1106_SSD1306_setOnOff(stateOn);
 #endif
 		// fallthrough
 	case stateDimmed:
@@ -201,16 +236,22 @@ void ICACHE_FLASH_ATTR dispSetOrientation(Orientation orientation)
 		break;
 	default: return;
 	}
-#elif DISP_TYPE == 1106
+#elif DISP_TYPE == 1106 || DISP_TYPE == 1306
 	switch (orientation)
 	{
 	case orient0deg:
-		SH1106_setSegmentRemap(eNormalDir);
-		SH1106_setComOutScanDir(eScanFrom0);
+		SH1106_SSD1306_setSegmentRemap(eNormalDir);
+		SH1106_SSD1306_setComOutScanDir(eScanFrom0);
+#if DISP_HEIGHT == 32
+		SH1106_SSD1306_setDispVoffset(0);
+#endif
 		break;
 	case orient180deg:
-		SH1106_setSegmentRemap(eReverseDir);
-		SH1106_setComOutScanDir(eScanTo0);
+		SH1106_SSD1306_setSegmentRemap(eReverseDir);
+		SH1106_SSD1306_setComOutScanDir(eScanTo0);
+#if DISP_HEIGHT == 32
+		SH1106_SSD1306_setDispVoffset(32);
+#endif
 		break;
 	default: return;
 	}

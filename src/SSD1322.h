@@ -8,7 +8,7 @@
 #define RST_GPIO_MUX	PERIPHS_IO_MUX_GPIO5_U
 #define RST_GPIO_FUNC	FUNC_GPIO5
 
-void SSD1322_init(void);
+void SSD1322_init(Orientation orientation, int setDispOn);
 void SSD1322_setOnOff(DispState state);
 void SSD1322_setContrast(uchar value);
 void SSD1322_partialDispEn(uchar startRow, uchar endRow);

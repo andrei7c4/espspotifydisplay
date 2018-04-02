@@ -190,15 +190,14 @@ void ICACHE_FLASH_ATTR initAuthBasicStr(void)
 }
 
 
-#if DISP_TYPE == 1106
-void ICACHE_FLASH_ATTR SH1106_initDone(void)
+int ICACHE_FLASH_ATTR dispInitDone(void)
 {
-	debug("SH1106_initDone\n");
+	debug("dispInitDone\n");
 	drawSpotifyLogo();
 	dispUpdateFull();
 	wakeupDisplay();
+	return OK;
 }
-#endif
 
 
 void ICACHE_FLASH_ATTR user_init(void)
@@ -246,6 +245,10 @@ void ICACHE_FLASH_ATTR user_init(void)
 	os_memset(&TitleLabel, 0, sizeof(Label));
 	os_memset(&ArtistLabel, 0, sizeof(Label));
 	os_memset(&AlbumLabel, 0, sizeof(Label));
+
+#if DISP_HEIGHT < 64	// there's no space left for album on smallest displays
+	config.showAlbum = FALSE;
+#endif
 	setLabelDimensions(config.showAlbum);
 
 
@@ -273,13 +276,14 @@ void ICACHE_FLASH_ATTR user_init(void)
 #endif
 
 #if DISP_TYPE == 1322
-	SSD1322_init();
-	drawSpotifyLogo();
-	dispUpdateFull();
-	wakeupDisplay();
+	SSD1322_init(orient0deg, FALSE);
+	dispInitDone();
 #elif DISP_TYPE == 1106
 	i2c_gpio_init();
-	SH1106_init(TRUE, SH1106_initDone, FALSE);
+	SH1106_init(TRUE, dispInitDone, orient0deg, FALSE);
+#elif DISP_TYPE == 1306
+	i2c_gpio_init();
+	SSD1306_init(TRUE, dispInitDone, orient180deg, FALSE);
 #endif
 
 		//wifi_set_opmode(NULL_MODE);
@@ -625,6 +629,7 @@ LOCAL void ICACHE_FLASH_ATTR updateTrackProgress(int progress, int duration)
 	activeBuf = &MainGfxBuf;
 	activeBufClearProgBar();
 
+#if PROGBAR_HEIGHT >= 10
 	char timeStr[7];
 	int minutes = progress / 60;
 	int seconds = progress % 60;
@@ -636,12 +641,12 @@ LOCAL void ICACHE_FLASH_ATTR updateTrackProgress(int progress, int duration)
 	len = ets_snprintf(timeStr, sizeof(timeStr), "%d:%02d", minutes, seconds);
 	int timeStrWidth = drawStrAlignRight_Latin(&sevensegment, DISP_WIDTH-1, PROGBAR_OFFSET, timeStr, len);
 
-	int barX = timeStrWidth + 7;
-	int barMaxWidth = DISP_WIDTH-1 - (barX*2);
-	int barXmax = barX+barMaxWidth-1;
-	int barY = 59;
-	int barHeight = 3;
-	int barY2 = barY+barHeight-1;
+	const int barX = timeStrWidth + 7;
+	const int barMaxWidth = DISP_WIDTH-1 - (barX*2);
+	const int barXmax = barX+barMaxWidth-1;
+	const int barHeight = 3;
+	const int barY = PROGBAR_OFFSET + 6;
+	const int barY2 = barY + barHeight - 1;
 	drawLine(barX, barY-1, barXmax, barY-1, 1);
 	drawLine(barX, barY2+1, barXmax, barY2+1, 1);
 	drawLine(barX-1, barY, barX-1, barY2, 1);
@@ -651,9 +656,17 @@ LOCAL void ICACHE_FLASH_ATTR updateTrackProgress(int progress, int duration)
 	int barWidth = progressPercent * barMaxWidth + 0.5;
 	if (barWidth > 0)
 	{
-		int barX2 = barX+barWidth-1;
+		int barX2 = barX + barWidth - 1;
 		drawRect(barX, barY, barX2, barY2, 1);
 	}
+#elif PROGBAR_HEIGHT >= 1
+	float progressPercent = ((float)progress) / duration;
+	int barWidth = progressPercent * DISP_WIDTH + 0.5;
+	if (barWidth > 0)
+	{
+		drawLine(0, PROGBAR_OFFSET, barWidth, PROGBAR_OFFSET, 1);
+	}
+#endif
 
 	dispUpdateProgBar();
 }
@@ -837,36 +850,33 @@ LOCAL void ICACHE_FLASH_ATTR parseApiReply(void)
 			os_memset(&track, 0, sizeof(TrackInfo));
 			if (parseTrackInfo(json, jsonLen, &track) == OK)
 			{
-				int trackChanged = wstrcmp(curTrack.name.str, track.name.str);
+				int trackChanged = (wstrcmp(curTrack.name.str, track.name.str) != 0);
 				int artistChanged = !strListEqual(&curTrack.artists, &track.artists);
-				int albumChanged = wstrcmp(curTrack.album.str, track.album.str);
+				int albumChanged = (wstrcmp(curTrack.album.str, track.album.str) != 0);
 
 				if (trackChanged)
 				{
 					debug("new track\n");
 
-					const Font *trackFont = &arial13b;
-					GfxBufAlloc(&TitleLabel.buf, strWidth(trackFont, track.name.str));
+					GfxBufAlloc(&TitleLabel.buf, strWidth(TitleLabel.font, track.name.str));
 					activeBuf = &TitleLabel.buf;
-					drawStr(trackFont, 0, 0, track.name.str, track.name.length);
+					drawStr(TitleLabel.font, 0, 0, track.name.str, track.name.length);
 				}
 				if (artistChanged)
 				{
 					debug("new artist\n");
 
-					const Font *artistFont = &arial13;
-					GfxBufAlloc(&ArtistLabel.buf, strListWidth(artistFont, &track.artists, L", "));
+					GfxBufAlloc(&ArtistLabel.buf, strListWidth(ArtistLabel.font, &track.artists, L", "));
 					activeBuf = &ArtistLabel.buf;
-					strListDraw(artistFont, 0, 0, &track.artists, L", ");
+					strListDraw(ArtistLabel.font, 0, 0, &track.artists, L", ");
 				}
 				if (albumChanged)
 				{
 					debug("new album\n");
 
-					const Font *albumFont = &arial10;
-					GfxBufAlloc(&AlbumLabel.buf, strWidth(albumFont, track.album.str));
+					GfxBufAlloc(&AlbumLabel.buf, strWidth(AlbumLabel.font, track.album.str));
 					activeBuf = &AlbumLabel.buf;
-					drawStr(albumFont, 1, 0, track.album.str, track.album.length);
+					drawStr(AlbumLabel.font, 1, 0, track.album.str, track.album.length);
 				}
 
 				if (trackChanged || artistChanged || albumChanged)
@@ -888,18 +898,16 @@ LOCAL void ICACHE_FLASH_ATTR parseApiReply(void)
 						if (trackChanged)
 						{
 							GfxBufCopy(&MainGfxBuf, &TitleLabel.buf, TitleLabel.offset);
-							dispUpdate(TitleLabel.offset, TitleLabel.buf.height);
 						}
 						if (artistChanged)
 						{
 							GfxBufCopy(&MainGfxBuf, &ArtistLabel.buf, ArtistLabel.offset);
-							dispUpdate(ArtistLabel.offset, ArtistLabel.buf.height);
 						}
 						if (albumChanged)
 						{
 							GfxBufCopy(&MainGfxBuf, &AlbumLabel.buf, AlbumLabel.offset);
-							dispUpdate(AlbumLabel.offset, AlbumLabel.buf.height);
 						}
+						dispUpdateLabels(trackChanged, artistChanged, albumChanged);
 
 						if (config.scrollMode & eHScroll)
 						{

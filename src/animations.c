@@ -18,6 +18,9 @@ LOCAL void hScrollStart(void);
 LOCAL void hScrollContinue(void);
 LOCAL void ICACHE_FLASH_ATTR scrollTmrCb(void (*scrollStep)(Label *))
 {
+	int updateTitle = TitleLabel.scrollEn;
+	int updateArtist = ArtistLabel.scrollEn;
+	int updateAlbum = AlbumLabel.scrollEn;
 	if (TitleLabel.scrollEn)
 	{
 		scrollStep(&TitleLabel);
@@ -30,6 +33,8 @@ LOCAL void ICACHE_FLASH_ATTR scrollTmrCb(void (*scrollStep)(Label *))
 	{
 		scrollStep(&AlbumLabel);
 	}
+	dispUpdateLabels(updateTitle, updateArtist, updateAlbum);
+
 	if (!TitleLabel.scrollEn && !ArtistLabel.scrollEn && !AlbumLabel.scrollEn)
 	{
 		scrollStop();		// scroll round done
@@ -58,7 +63,6 @@ LOCAL void ICACHE_FLASH_ATTR vScrollStep(Label *label)
 		os_memcpy(dst, src, width);
 	}
 	os_memcpy(dst, label->buf.buf + (label->vScrollY*label->buf.memWidth), width);
-	dispUpdate(label->offset, label->buf.height);
 	label->vScrollY++;
 	if (label->vScrollY >= label->buf.height)
 	{
@@ -124,8 +128,6 @@ LOCAL void ICACHE_FLASH_ATTR hScrollStep(Label *label)
 			label->scrollEn = FALSE;
 		}
 	}
-
-	dispUpdate(label->offset, label->buf.height);
 }
 
 LOCAL void ICACHE_FLASH_ATTR hScrollStep1(void)

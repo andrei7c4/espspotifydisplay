@@ -6,7 +6,6 @@
 #include "typedefs.h"
 #include "common.h"
 #include "conv.h"
-#include "display.h"
 #include "graphics.h"
 
 
@@ -28,6 +27,11 @@ Label AlbumLabel = {0};
 
 void ICACHE_FLASH_ATTR setLabelDimensions(int showAlbum)
 {
+	TitleLabel.font = &arial13b;
+	ArtistLabel.font = &arial13;
+	AlbumLabel.font = &arial10;
+
+#if DISP_HEIGHT >= 64
 	if (showAlbum)
 	{
 		TitleLabel.buf.height = 17;
@@ -40,6 +44,21 @@ void ICACHE_FLASH_ATTR setLabelDimensions(int showAlbum)
 		ArtistLabel.buf.height = 20;
 		AlbumLabel.buf.height = 0;
 	}
+#elif DISP_HEIGHT == 32
+	// use smaller fonts on smallest displays
+	TitleLabel.font = &arial10b;
+	ArtistLabel.font = &arial10;
+
+	TitleLabel.buf.height = 15;
+	ArtistLabel.buf.height = 15;
+	AlbumLabel.buf.height = 0;
+#elif DISP_HEIGHT == 0
+	TitleLabel.buf.height = 0;
+	ArtistLabel.buf.height = 0;
+	AlbumLabel.buf.height = 0;
+#else
+#error "Only 64 and 32 display heights are supported"
+#endif
 
 	TitleLabel.offset = 0;
 	ArtistLabel.offset = TitleLabel.buf.height;

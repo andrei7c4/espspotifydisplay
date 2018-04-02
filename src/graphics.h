@@ -2,9 +2,17 @@
 #define INCLUDE_DISPLAY_H_
 
 #include "typedefs.h"
+#include "display.h"
+#include "fonts.h"
 
-
+#if DISP_HEIGHT >= 64
 #define PROGBAR_OFFSET	53
+#elif DISP_HEIGHT == 32
+#define PROGBAR_OFFSET	31
+#elif DISP_HEIGHT == 0
+#define PROGBAR_OFFSET	0
+#endif
+
 #define PROGBAR_HEIGHT	(DISP_HEIGHT-PROGBAR_OFFSET)
 
 extern int inverseColor;
@@ -27,6 +35,7 @@ struct Label_
 	int vScrollY;
 	int hScrollX;
 	int hScrollBit;
+	const Font *font;
 };
 typedef struct Label_ Label;
 
