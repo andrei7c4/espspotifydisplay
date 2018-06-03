@@ -92,7 +92,19 @@ LOCAL int ICACHE_FLASH_ATTR getNextBool(struct jsonparse_state *state, int depth
 	if (!jumpToNextType(state, depth, JSON_TYPE_PAIR_NAME, name))
 		return FALSE;
 
-	*value = (jsonparse_next(state) == JSON_TYPE_TRUE);
+	const char *pJson = state->json + state->pos;
+	if (!os_strncmp(pJson, " : true", 7))
+	{
+		*value = TRUE;
+	}
+	else if (!os_strncmp(pJson, " : false", 8))
+	{
+		*value = FALSE;
+	}
+	else
+	{
+		return FALSE;
+	}
 	return TRUE;
 }
 
@@ -122,9 +134,6 @@ int ICACHE_FLASH_ATTR parseTrackInfo(const char *json, int jsonLen, TrackInfo *t
 	jsonparse_setup(&state, json, jsonLen);
 
 	if (!getNextInt(&state, 1, "progress_ms", &track->progress))
-		return ERROR;
-
-	if (!getNextBool(&state, 1, "is_playing", &track->isPlaying))
 		return ERROR;
 
 	if (!jumpToNextType(&state, 1, JSON_TYPE_PAIR_NAME, "item"))
@@ -165,6 +174,9 @@ int ICACHE_FLASH_ATTR parseTrackInfo(const char *json, int jsonLen, TrackInfo *t
 		return ERROR;
 
 	if ((track->name.length = getNextStringAllocUtf8(&state, 2, "name", &track->name.str)) == 0)
+		return ERROR;
+
+	if (!getNextBool(&state, 1, "is_playing", &track->isPlaying))
 		return ERROR;
 
 	return OK;
