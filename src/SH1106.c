@@ -219,7 +219,7 @@ LOCAL int ICACHE_FLASH_ATTR setVcomDesel(uchar level)	// cmd 18
 
 // in: horizontally packed (MSB left) pixel block
 // out: vertically packed (LSB up) pixel block
-LOCAL void transform64x64block(uchar *in, uchar *out)
+LOCAL void transform8x8block(uchar *in, uchar *out)
 {
 	int row, col;
 	uchar maskIn, maskOut;
@@ -250,12 +250,12 @@ void SH1106_SSD1306_cpyMemBuf(uchar *mem, int memWidth, int memRow, uchar dispPa
 		setPageAddr(dispPage);
         for (x = 0; x < DISP_MEMWIDTH; x++)
 		{
-        	// form 64x64 pixel block (horizontally packed)
+        	// form 8x8 pixel block (horizontally packed)
         	for (y2 = 0; y2 < 8; y2++)
     		{
     			tempH[y2] = *(mem + (y+y2)*memWidth + x);
     		}
-    		transform64x64block(tempH, tempV);
+    		transform8x8block(tempH, tempV);
     		writeData(tempV, sizeof(tempV));
 		}
 	}
