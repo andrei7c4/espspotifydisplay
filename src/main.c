@@ -848,7 +848,8 @@ LOCAL void ICACHE_FLASH_ATTR parseApiReply(void)
 
 			TrackInfo track;
 			os_memset(&track, 0, sizeof(TrackInfo));
-			if (parseTrackInfo(json, jsonLen, &track) == OK)
+			TrackParseRc rc = parseTrackInfo(json, jsonLen, &track);
+			if (rc == trackParseOk)
 			{
 				int trackChanged = (wstrcmp(curTrack.name.str, track.name.str) != 0);
 				int artistChanged = !strListEqual(&curTrack.artists, &track.artists);
@@ -950,7 +951,7 @@ LOCAL void ICACHE_FLASH_ATTR parseApiReply(void)
 			}
 			else
 			{
-				debug("parseTrack failed\n");
+				debug("parseTrack failed (%d)\n", rc);
 				trackInfoFree(&track);
 			}
 		}

@@ -92,20 +92,72 @@ LOCAL int ICACHE_FLASH_ATTR getNextBool(struct jsonparse_state *state, int depth
 	if (!jumpToNextType(state, depth, JSON_TYPE_PAIR_NAME, name))
 		return FALSE;
 
-	const char *pJson = state->json + state->pos;
-	if (!os_strncmp(pJson, " : true", 7))
+	switch(jsonparse_next(state))
 	{
+	case JSON_TYPE_TRUE:
 		*value = TRUE;
-	}
-	else if (!os_strncmp(pJson, " : false", 8))
-	{
+		return TRUE;
+	case JSON_TYPE_FALSE:
 		*value = FALSE;
+		return TRUE;
+	default:
+		return FALSE;
+	}
+}
+
+
+TrackParseRc ICACHE_FLASH_ATTR parseTrackInfo(const char *json, int jsonLen, TrackInfo *track)
+{
+	struct jsonparse_state state;
+	jsonparse_setup(&state, json, jsonLen);
+
+	if (!getNextInt(&state, 1, "progress_ms", &track->progress))
+		return trackParseOk;
+
+	if (!jumpToNextType(&state, 1, JSON_TYPE_PAIR_NAME, "item"))
+		return trackParseItemErr;
+
+	if (config.showAlbum)
+	{
+		if (!jumpToNextType(&state, 2, JSON_TYPE_PAIR_NAME, "album"))
+			return trackParseAlbumErr1;
+
+		if ((track->album.length = getNextStringAllocUtf8(&state, 3, "name", &track->album.str)) == 0)
+			return trackParseAlbumErr2;
 	}
 	else
 	{
-		return FALSE;
+		track->album.str = (ushort*)os_malloc(sizeof(ushort));
+		track->album.str[0] = 0;
 	}
-	return TRUE;
+
+	if (!jumpToNextType(&state, 2, JSON_TYPE_PAIR_NAME, "artists"))
+		return trackParseArtistsErr1;
+
+	if (!jumpToNextType(&state, 3, JSON_TYPE_ARRAY, NULL))
+		return trackParseArtistsErr2;
+
+	ushort *str;
+	int length;
+	minDepth = 3;
+	while ((length = getNextStringAllocUtf8(&state, 4, "name", &str)) > 0)
+	{
+		strListAppend(&track->artists, str, length);
+	}
+	minDepth = 0;
+	if (track->artists.count < 1)
+		return trackParseArtistsErr3;
+
+	if (!getNextInt(&state, 2, "duration_ms", &track->duration))
+		return trackParseDurationErr;
+
+	if ((track->name.length = getNextStringAllocUtf8(&state, 2, "name", &track->name.str)) == 0)
+		return trackParseNameErr;
+
+	if (!getNextBool(&state, 1, "is_playing", &track->isPlaying))
+		return trackParseIsPlayingErr;
+
+	return OK;
 }
 
 
@@ -127,60 +179,4 @@ int ICACHE_FLASH_ATTR parseTokens(const char *json, int jsonLen,
 
 	return OK;
 }
-
-int ICACHE_FLASH_ATTR parseTrackInfo(const char *json, int jsonLen, TrackInfo *track)
-{
-	struct jsonparse_state state;
-	jsonparse_setup(&state, json, jsonLen);
-
-	if (!getNextInt(&state, 1, "progress_ms", &track->progress))
-		return ERROR;
-
-	if (!jumpToNextType(&state, 1, JSON_TYPE_PAIR_NAME, "item"))
-		return ERROR;
-
-	if (config.showAlbum)
-	{
-		if (!jumpToNextType(&state, 2, JSON_TYPE_PAIR_NAME, "album"))
-			return ERROR;
-
-		if ((track->album.length = getNextStringAllocUtf8(&state, 3, "name", &track->album.str)) == 0)
-			return ERROR;
-	}
-	else
-	{
-		track->album.str = (ushort*)os_malloc(sizeof(ushort));
-		track->album.str[0] = 0;
-	}
-
-	if (!jumpToNextType(&state, 2, JSON_TYPE_PAIR_NAME, "artists"))
-		return ERROR;
-
-	if (!jumpToNextType(&state, 3, JSON_TYPE_ARRAY, NULL))
-		return ERROR;
-
-	ushort *str;
-	int length;
-	minDepth = 3;
-	while ((length = getNextStringAllocUtf8(&state, 4, "name", &str)) > 0)
-	{
-		strListAppend(&track->artists, str, length);
-	}
-	minDepth = 0;
-	if (track->artists.count < 1)
-		return ERROR;
-
-	if (!getNextInt(&state, 2, "duration_ms", &track->duration))
-		return ERROR;
-
-	if ((track->name.length = getNextStringAllocUtf8(&state, 2, "name", &track->name.str)) == 0)
-		return ERROR;
-
-	if (!getNextBool(&state, 1, "is_playing", &track->isPlaying))
-		return ERROR;
-
-	return OK;
-}
-
-
 
