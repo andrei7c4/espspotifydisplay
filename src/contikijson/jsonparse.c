@@ -105,7 +105,7 @@ atomic(struct jsonparse_state *state, char type)
     default:              str = "";      break;
     }
 
-    while ((c = state->json[state->pos]) && c != ' ' && c != ',' && c != ']' && c != '}') {
+    while ((c = state->json[state->pos]) && c != ' ' && c != ',' && c != ']' && c != '}' && c != '\n') {
       state->pos++;
     }
 
