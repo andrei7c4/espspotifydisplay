@@ -1,182 +1,183 @@
 #include <os_type.h>
-#include <osapi.h>
 #include <mem.h>
-#include "contikijson/jsonparse.h"
-#include "contikijson/jsontree.h"
+#include <string.h>
 #include "parsejson.h"
-#include "common.h"
-#include "config.h"
-#include "conv.h"
+#include "typedefs.h"
 
 
-LOCAL int minDepth = 0;
-LOCAL int ICACHE_FLASH_ATTR jumpToNextType(struct jsonparse_state *state, int depth, int type, const char *name)
+LOCAL void pathAlloc(Path *path, size_t size);
+LOCAL void pathPush(Path *path, const char *str);
+LOCAL const char* pathGetLast(Path *path);
+LOCAL void pathReplaceLast(Path *path, const char *str);
+LOCAL void pathPop(Path *path);
+LOCAL int pathEqual(const Path *p1, const Path *p2);
+
+void ICACHE_FLASH_ATTR parsejson(const char *json, int jsonLen, PathCallback *callbacks, size_t callbacksSize, void *object)
 {
-	char buf[50];
-	int json_type;
-	while ((json_type = jsonparse_next(state)) != 0)
-	{
-		if (depth == state->depth && json_type == type)
-		{
-			if (name)
-			{
-				jsonparse_copy_value(state, buf, sizeof(buf));
-				if (!os_strncmp(buf, name, sizeof(buf)))
-				{
-					return TRUE;
-				}
-			}
-			else
-			{
-				return TRUE;
-			}
-		}
-		else if (state->depth < minDepth)
-		{
-			return 0;
-		}
-	}
-	return FALSE;
-}
+    int type;
+    int curDepth = 0;
 
-LOCAL int ICACHE_FLASH_ATTR getNextString(struct jsonparse_state *state, int depth, const char *name, char *str, int strSize)
-{
-	if (!jumpToNextType(state, depth, JSON_TYPE_PAIR_NAME, name))
-		return 0;
+    Path path;
+    pathAlloc(&path, JSONPARSE_MAX_DEPTH);
 
-	if (jsonparse_next(state) != JSON_TYPE_STRING)
-		return 0;
+    struct jsonparse_state state;
+    jsonparse_setup(&state, json, jsonLen);
 
-	return jsonparse_copy_value(state, str, strSize);
-}
+    while ((type = jsonparse_next(&state)) != 0)
+    {
+        if (state.depth > curDepth)
+        {
+            if (path.count && pathGetLast(&path) == NULL)
+            {
+                // make empty string for unnamed path segment
+                char *emptyStr = os_malloc(1);
+                emptyStr[0] = '\0';
+                pathReplaceLast(&path, emptyStr);
+            }
+            pathPush(&path, NULL);
+        }
+        else if (state.depth < curDepth)
+        {
+            pathPop(&path);
+        }
+        curDepth = state.depth;
 
-LOCAL int ICACHE_FLASH_ATTR getNextStringAlloc(struct jsonparse_state *state, int depth, const char *name, char **str)
-{
-	if (!jumpToNextType(state, depth, JSON_TYPE_PAIR_NAME, name))
-		return 0;
+        if (type == JSON_TYPE_PAIR_NAME)
+        {
+            size_t strLen = jsonparse_get_len(&state);
+            char *str = os_malloc(strLen+1);
+            jsonparse_copy_value(&state, str, strLen+1);
+            pathReplaceLast(&path, str);
 
-	if (jsonparse_next(state) != JSON_TYPE_STRING)
-		return 0;
-
-	int bufSize = jsonparse_get_len(state)+1;
-	*str = (char*)os_malloc(bufSize);
-	return jsonparse_copy_value(state, *str, bufSize);
-}
-
-LOCAL int ICACHE_FLASH_ATTR getNextStringAllocUtf8(struct jsonparse_state *state, int depth, const char *name, ushort **str)
-{
-	char *temp = NULL;
-	int length = getNextStringAlloc(state, depth, name, &temp);
-	if (!temp) return 0;
-	length = decodeUtf8(temp, length, str);
-	os_free(temp);
-	return length;
-}
-
-LOCAL int ICACHE_FLASH_ATTR getNextInt(struct jsonparse_state *state, int depth, const char *name, int *value)
-{
-	char buf[11];
-	if (!jumpToNextType(state, depth, JSON_TYPE_PAIR_NAME, name))
-		return FALSE;
-
-	if (jsonparse_next(state) != JSON_TYPE_NUMBER)
-		return FALSE;
-
-	jsonparse_copy_value(state, buf, sizeof(buf));
-	*value = strtoint(buf);
-	return TRUE;
-}
-
-LOCAL int ICACHE_FLASH_ATTR getNextBool(struct jsonparse_state *state, int depth, const char *name, int *value)
-{
-	if (!jumpToNextType(state, depth, JSON_TYPE_PAIR_NAME, name))
-		return FALSE;
-
-	switch(jsonparse_next(state))
-	{
-	case JSON_TYPE_TRUE:
-		*value = TRUE;
-		return TRUE;
-	case JSON_TYPE_FALSE:
-		*value = FALSE;
-		return TRUE;
-	default:
-		return FALSE;
-	}
+            // search matching callbacks for current path
+            size_t i;
+            for(i = 0; i < callbacksSize; i++)
+            {
+                PathCallback *pathCb = &callbacks[i];
+                if (pathEqual(&path, &pathCb->path))
+                {
+                    type = jsonparse_next(&state);
+                    if (type)
+                    {
+                        strLen = jsonparse_get_len(&state);
+                        str = os_malloc(strLen+1);
+                        jsonparse_copy_value(&state, str, strLen+1);
+                        pathCb->callback(str, strLen, type, object);
+                        os_free(str);
+                    }
+                    else
+                    {
+                        goto parseout;
+                    }
+                    break;
+                }
+            }
+        }
+    }
+parseout:
+    pathFree(&path, TRUE);
 }
 
 
-TrackParseRc ICACHE_FLASH_ATTR parseTrackInfo(const char *json, int jsonLen, TrackInfo *track)
+void ICACHE_FLASH_ATTR pathInit_(Path *path, const char *str1, ...)
 {
-	struct jsonparse_state state;
-	jsonparse_setup(&state, json, jsonLen);
+    va_list args;
 
-	if (!getNextInt(&state, 1, "progress_ms", &track->progress))
-		return trackParseOk;
+    // get arguments count
+    va_start(args, str1);
+    const char *str = str1;
+    size_t count = 0;
+    while(str)
+    {
+        count++;
+        str = va_arg(args, char*);
+    }
+    va_end(args);
 
-	if (!jumpToNextType(&state, 1, JSON_TYPE_PAIR_NAME, "item"))
-		return trackParseItemErr;
-
-	if (config.showAlbum)
-	{
-		if (!jumpToNextType(&state, 2, JSON_TYPE_PAIR_NAME, "album"))
-			return trackParseAlbumErr1;
-
-		if ((track->album.length = getNextStringAllocUtf8(&state, 3, "name", &track->album.str)) == 0)
-			return trackParseAlbumErr2;
-	}
-	else
-	{
-		track->album.str = (ushort*)os_malloc(sizeof(ushort));
-		track->album.str[0] = 0;
-	}
-
-	if (!jumpToNextType(&state, 2, JSON_TYPE_PAIR_NAME, "artists"))
-		return trackParseArtistsErr1;
-
-	if (!jumpToNextType(&state, 3, JSON_TYPE_ARRAY, NULL))
-		return trackParseArtistsErr2;
-
-	ushort *str;
-	int length;
-	minDepth = 3;
-	while ((length = getNextStringAllocUtf8(&state, 4, "name", &str)) > 0)
-	{
-		strListAppend(&track->artists, str, length);
-	}
-	minDepth = 0;
-	if (track->artists.count < 1)
-		return trackParseArtistsErr3;
-
-	if (!getNextInt(&state, 2, "duration_ms", &track->duration))
-		return trackParseDurationErr;
-
-	if ((track->name.length = getNextStringAllocUtf8(&state, 2, "name", &track->name.str)) == 0)
-		return trackParseNameErr;
-
-	if (!getNextBool(&state, 1, "is_playing", &track->isPlaying))
-		return trackParseIsPlayingErr;
-
-	return OK;
+    // allocate space and copy pointers to strings
+    pathAlloc(path, count);
+    va_start(args, str1);
+    str = str1;
+    while(str)
+    {
+        pathPush(path, str);
+        str = va_arg(args, char*);
+    }
+    va_end(args);
 }
 
-
-int ICACHE_FLASH_ATTR parseTokens(const char *json, int jsonLen,
-		char *accessToken, int accessTokenSize,
-		char *refreshToken, int refreshTokenSize,
-		int *expiresIn)
+void ICACHE_FLASH_ATTR pathFree(Path *path, int freeStrings)
 {
-	struct jsonparse_state state;
-	jsonparse_setup(&state, json, jsonLen);
-
-	if (!getNextString(&state, 1, "access_token", accessToken, accessTokenSize))
-		return ERROR;
-
-	if (!getNextInt(&state, 1, "expires_in", expiresIn))
-		return ERROR;
-
-	getNextString(&state, 1, "refresh_token", refreshToken, refreshTokenSize);
-
-	return OK;
+    if (freeStrings)
+    {
+        while(path->count)
+        {
+            path->count--;
+            os_free(path->strings[path->count]);
+        }
+    }
+    os_free(path->strings);
+    path->capacity = 0;
+    path->count = 0;
 }
 
+LOCAL ICACHE_FLASH_ATTR void pathAlloc(Path *path, size_t size)
+{
+    path->strings = os_malloc(size * sizeof(char*));
+    path->capacity = size;
+    path->count = 0;
+}
+
+LOCAL ICACHE_FLASH_ATTR void pathPush(Path *path, const char *str)
+{
+    if (path->count < path->capacity)
+    {
+        path->strings[path->count] = (char*)str;
+        path->count++;
+    }
+}
+
+LOCAL ICACHE_FLASH_ATTR const char* pathGetLast(Path *path)
+{
+    if (path->count)
+    {
+        return path->strings[path->count - 1];
+    }
+    return NULL;
+}
+
+LOCAL ICACHE_FLASH_ATTR void pathReplaceLast(Path *path, const char *str)
+{
+    if (path->count)
+    {
+        os_free(path->strings[path->count - 1]);
+        path->strings[path->count - 1] = (char*)str;
+    }
+}
+
+LOCAL ICACHE_FLASH_ATTR void pathPop(Path *path)
+{
+    if (path->count)
+    {
+        path->count--;
+        os_free(path->strings[path->count]);
+        path->strings[path->count] = NULL;
+    }
+}
+
+LOCAL ICACHE_FLASH_ATTR int pathEqual(const Path *p1, const Path *p2)
+{
+    if (p1->count != p2->count)
+    {
+        return FALSE;
+    }
+    size_t i;
+    for(i = 0; i < p1->count; i++)
+    {
+        if (strcmp(p1->strings[i], p2->strings[i]))
+        {
+            return FALSE;
+        }
+    }
+    return TRUE;
+}

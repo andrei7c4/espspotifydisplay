@@ -15,7 +15,7 @@
 #include "debug.h"
 #include "httpreq.h"
 #include "common.h"
-#include "parsejson.h"
+#include "parseobjects.h"
 #include "fonts.h"
 #include "icons.h"
 #include "strlib.h"
@@ -71,18 +71,18 @@ LOCAL void sendApiRequest(void (*requestFunc)(void));
 LOCAL void getCurrentlyPlaying(void);
 LOCAL void sendPlayPauseCmd(void);
 LOCAL void sendNextTrackCmd(void);
-LOCAL void parseApiReply(void);
-LOCAL void parseAuthReply(void);
+LOCAL void handleApiReply(void);
+LOCAL void handleAuthReply(void);
 
 typedef struct
 {
 	const char *host;
 	ip_addr_t ip;
 	void (*requestFunc)(void);
-	void (*parserFunc)(void);
+	void (*handlerFunc)(void);
 }ConnParams;
-ConnParams authConnParams = {"accounts.spotify.com", {0}, requestTokens, parseAuthReply};
-ConnParams apiConnParams = {"api.spotify.com", {0}, getCurrentlyPlaying, parseApiReply};
+ConnParams authConnParams = {"accounts.spotify.com", {0}, requestTokens, handleAuthReply};
+ConnParams apiConnParams = {"api.spotify.com", {0}, getCurrentlyPlaying, handleApiReply};
 
 LOCAL int disconnExpected = FALSE;
 LOCAL int reconnCbCalled = FALSE;
@@ -231,6 +231,7 @@ void ICACHE_FLASH_ATTR user_init(void)
 	configRead(&config);
 
 	initAuthBasicStr();
+	initPaths();
 
 	debug("Built on %s %s\n", __DATE__, __TIME__);
 	debug("SDK version %s\n", system_get_sdk_version());
@@ -531,13 +532,13 @@ LOCAL void ICACHE_FLASH_ATTR onTcpDataRecv(void *arg, char *pusrdata, unsigned s
 	{
 		if (httpRxMsgCurLen < (HTTP_RX_BUF_SIZE-1))
 		{			
-			os_timer_setfn(&httpRxTmr, (os_timer_func_t*)params->parserFunc, NULL);
+			os_timer_setfn(&httpRxTmr, (os_timer_func_t*)params->handlerFunc, NULL);
 			os_timer_arm(&httpRxTmr, 100, 0);
 		}
 		else
 		{
 			debug("httpMsgRxBuf full\n");
-			params->parserFunc();
+			params->handlerFunc();
 		}
 	}
 }
@@ -789,7 +790,7 @@ LOCAL void ICACHE_FLASH_ATTR sendNextTrackCmd(void)
 
 
 
-LOCAL void ICACHE_FLASH_ATTR parseAuthReply(void)
+LOCAL void ICACHE_FLASH_ATTR handleAuthReply(void)
 {
 	setAppState(stateReplyReceived);
 	os_timer_disarm(&gpTmr);
@@ -809,27 +810,27 @@ LOCAL void ICACHE_FLASH_ATTR parseAuthReply(void)
 		int jsonLen = httpRxMsgCurLen - (json - httpMsgRxBuf);
 		//debug("jsonLen %d\n", jsonLen);
 
-		int expiresIn;
-		if (parseTokens(json, jsonLen,
-				config.access_token, sizeof(config.access_token),
-				config.refresh_token, sizeof(config.refresh_token),
-				&expiresIn) != OK)
-		{
-			debug("parseTokens failed\n");
-			debug("%s\n", httpMsgRxBuf);
-			return;
-		}
-		uint ts = sntp_get_current_timestamp();
-		config.tokenExpireTs = ts + expiresIn;
-		configWrite(&config);
+		Tokens tokens = {config.access_token, sizeof(config.access_token),
+						 config.refresh_token, sizeof(config.refresh_token), 0, 0};
+	    TokensParsed tokensParsed = parseTokens(json, jsonLen, &tokens);
+	    if((tokensParsed & eTokensAccessParsed) && (tokensParsed & eTokensExpiresInParsed))
+	    {
+			uint ts = sntp_get_current_timestamp();
+			config.tokenExpireTs = ts + tokens.expiresIn;
+			configWrite(&config);
 
-		connectToHost(&apiConnParams);
+			connectToHost(&apiConnParams);
+	    }
+	    else
+	    {
+			debug("parseTokens failed (0x%02X)\n", tokens.parsed);
+		}
 	}
 	
 	httpRxMsgCurLen = 0;
 }
 
-LOCAL void ICACHE_FLASH_ATTR parseApiReply(void)
+LOCAL void ICACHE_FLASH_ATTR handleApiReply(void)
 {
 	static int firstReply = TRUE;
 	setAppState(stateReplyReceived);
@@ -848,8 +849,7 @@ LOCAL void ICACHE_FLASH_ATTR parseApiReply(void)
 
 			TrackInfo track;
 			os_memset(&track, 0, sizeof(TrackInfo));
-			TrackParseRc rc = parseTrackInfo(json, jsonLen, &track);
-			if (rc == trackParseOk)
+			if (parseTrackInfo(json, jsonLen, &track) == eTrackAllParsed)
 			{
 				int trackChanged = (wstrcmp(curTrack.name.str, track.name.str) != 0);
 				int artistChanged = !strListEqual(&curTrack.artists, &track.artists);
@@ -951,7 +951,7 @@ LOCAL void ICACHE_FLASH_ATTR parseApiReply(void)
 			}
 			else
 			{
-				debug("parseTrack failed (%d)\n", rc);
+				debug("parseTrack failed (0x%02X)\n", track.parsed);
 				trackInfoFree(&track);
 			}
 		}

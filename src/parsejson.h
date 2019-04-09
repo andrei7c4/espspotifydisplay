@@ -1,38 +1,31 @@
 #ifndef INCLUDE_PARSEJSON_H_
 #define INCLUDE_PARSEJSON_H_
 
-#include "common.h"
-#include "strlib.h"
+#include <stddef.h>
+#include <stdarg.h>
+#include "contikijson/jsonparse.h"
+
+typedef void (*PathCb)(const char*, int, int, void*);
 
 typedef struct
 {
-	StrBuf name;
-	StrList artists;
-	StrBuf album;
-	int duration;
-	int progress;
-	int isPlaying;
-}TrackInfo;
+    char **strings;
+    size_t capacity;
+    size_t count;
+}Path;
 
-typedef enum
+typedef struct
 {
-	trackParseOk = 0,
-	trackParseItemErr,
-	trackParseAlbumErr1,
-	trackParseAlbumErr2,
-	trackParseArtistsErr1,
-	trackParseArtistsErr2,
-	trackParseArtistsErr3,
-	trackParseDurationErr,
-	trackParseNameErr,
-	trackParseIsPlayingErr,
-}TrackParseRc;
+    Path path;
+    PathCb callback;
+}PathCallback;
 
-TrackParseRc parseTrackInfo(const char *json, int jsonLen, TrackInfo *track);
+void parsejson(const char *json, int jsonLen, PathCallback *callbacks, size_t callbacksSize, void *object);
 
-int parseTokens(const char *json, int jsonLen,
-		char *accessToken, int accessTokenSize,
-		char *refreshToken, int refreshTokenSize,
-		int *expiresIn);
+#define pathInit(...) pathInit_(__VA_ARGS__, NULL)
+void pathInit_(Path *path, const char *str1, ...);
+
+void pathFree(Path *path, int freeStrings);
+
 
 #endif /* INCLUDE_PARSEJSON_H_ */
