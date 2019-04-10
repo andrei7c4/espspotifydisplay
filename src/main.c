@@ -37,8 +37,8 @@ LOCAL TrackInfo curTrack = {0};
 LOCAL void ICACHE_FLASH_ATTR trackInfoFree(TrackInfo *track)
 {
 	os_free(track->name.str);
-	os_free(track->album.str);
 	strListClear(&track->artists);
+	strListClear(&track->album);
 }
 
 int ICACHE_FLASH_ATTR curTrackIsPlaying(void)
@@ -240,8 +240,6 @@ void ICACHE_FLASH_ATTR user_init(void)
 	os_memset(&curTrack, 0, sizeof(TrackInfo));
 	curTrack.name.str = (ushort*)os_malloc(sizeof(ushort));
 	curTrack.name.str[0] = 0;
-	curTrack.album.str = (ushort*)os_malloc(sizeof(ushort));
-	curTrack.album.str[0] = 0;
 
 	os_memset(&TitleLabel, 0, sizeof(Label));
 	os_memset(&ArtistLabel, 0, sizeof(Label));
@@ -853,7 +851,7 @@ LOCAL void ICACHE_FLASH_ATTR handleApiReply(void)
 			{
 				int trackChanged = (wstrcmp(curTrack.name.str, track.name.str) != 0);
 				int artistChanged = !strListEqual(&curTrack.artists, &track.artists);
-				int albumChanged = (wstrcmp(curTrack.album.str, track.album.str) != 0);
+				int albumChanged = !strListEqual(&curTrack.album, &track.album);
 
 				if (trackChanged)
 				{
@@ -875,9 +873,9 @@ LOCAL void ICACHE_FLASH_ATTR handleApiReply(void)
 				{
 					debug("new album\n");
 
-					GfxBufAlloc(&AlbumLabel.buf, strWidth(AlbumLabel.font, track.album.str));
+					GfxBufAlloc(&AlbumLabel.buf, strListWidth(AlbumLabel.font, &track.album, L" | "));
 					activeBuf = &AlbumLabel.buf;
-					drawStr(AlbumLabel.font, 1, 0, track.album.str, track.album.length);
+					strListDraw(AlbumLabel.font, 1, 0, &track.album, L" | ");
 				}
 
 				if (trackChanged || artistChanged || albumChanged)

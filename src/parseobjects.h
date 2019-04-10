@@ -24,7 +24,7 @@ typedef struct
 {
     StrBuf name;
     StrList artists;
-    StrBuf album;
+    StrList album;
     int duration;
     int progress;
     int isPlaying;

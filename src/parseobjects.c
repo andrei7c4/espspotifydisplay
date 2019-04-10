@@ -13,6 +13,7 @@ LOCAL void onTrackIsPlaying(const char *value, int length, int type, void *objec
 LOCAL void onTrackName(const char *value, int length, int type, void *object);
 LOCAL void onArtistName(const char *value, int length, int type, void *object);
 LOCAL void onAlbumName(const char *value, int length, int type, void *object);
+static void onReleaseDate(const char *value, int length, int type, void *object);
 
 LOCAL void onAccessToken(const char *value, int length, int type, void *object);
 LOCAL void onRefreshToken(const char *value, int length, int type, void *object);
@@ -22,9 +23,10 @@ LOCAL PathCallback trackCallbacks[] = {
         {.callback = onTrackName},
         {.callback = onArtistName},
         {.callback = onAlbumName},
+        {.callback = onReleaseDate},
         {.callback = onTrackDuration},
         {.callback = onTrackProgress},
-        {.callback = onTrackIsPlaying},
+        {.callback = onTrackIsPlaying}
 };
 
 LOCAL PathCallback tokensCallbacks[] = {
@@ -41,14 +43,16 @@ void ICACHE_FLASH_ATTR initPaths(void)
     if (config.showAlbum)
     {
         pathInit(&trackCallbacks[2].path, "item", "album", "name");
+        pathInit(&trackCallbacks[3].path, "item", "album", "release_date");
     }
     else
     {
         pathInit(&trackCallbacks[2].path);
+        pathInit(&trackCallbacks[3].path);
     }
-    pathInit(&trackCallbacks[3].path, "item", "duration_ms");
-    pathInit(&trackCallbacks[4].path, "progress_ms");
-    pathInit(&trackCallbacks[5].path, "is_playing");
+    pathInit(&trackCallbacks[4].path, "item", "duration_ms");
+    pathInit(&trackCallbacks[5].path, "progress_ms");
+    pathInit(&trackCallbacks[6].path, "is_playing");
 
     pathInit(&tokensCallbacks[0].path, "access_token");
     pathInit(&tokensCallbacks[1].path, "refresh_token");
@@ -60,8 +64,6 @@ TrackParsed ICACHE_FLASH_ATTR parseTrackInfo(const char *json, int jsonLen, Trac
     parsejson(json, jsonLen, trackCallbacks, NELEMENTS(trackCallbacks), track);
     if (!config.showAlbum)
     {
-        track->album.str = (ushort*)os_malloc(sizeof(ushort));
-        track->album.str[0] = 0;
         track->parsed |= eTrackAlbumParsed;
     }
     return track->parsed;
@@ -142,9 +144,38 @@ LOCAL void ICACHE_FLASH_ATTR onAlbumName(const char *value, int length, int type
     if (type == JSON_TYPE_STRING)
     {
         TrackInfo *track = object;
-        if ((track->album.length = decodeUtf8(value, length, &track->album.str)) > 0)
+        ushort *str;
+        int strLen;
+        if ((strLen = decodeUtf8(value, length, &str)) > 0)
         {
+            strListAppend(&track->album, str, strLen);
             track->parsed |= eTrackAlbumParsed;
+        }
+    }
+}
+
+static void onReleaseDate(const char *value, int length, int type, void *object)
+{
+    //debug("onReleaseDate: value %s, len %d, type %c\n", value, length, (char)type);
+
+    if (type == JSON_TYPE_STRING)
+    {
+        // cut month and day, leave the year only
+        int i;
+        for (i = 0; i < length; i++)
+        {
+            if (value[i] == '-')
+            {
+                length = i;
+            }
+        }
+
+        TrackInfo *track = object;
+        ushort *str;
+        int strLen;
+        if ((strLen = decodeUtf8(value, length, &str)) > 0)
+        {
+            strListAppend(&track->album, str, strLen);
         }
     }
 }
