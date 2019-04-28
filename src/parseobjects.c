@@ -3,7 +3,6 @@
 #include <mem.h>
 #include "parseobjects.h"
 #include "parsejson.h"
-#include "common.h"
 #include "config.h"
 #include "conv.h"
 
@@ -19,49 +18,39 @@ LOCAL void onAccessToken(const char *value, int length, int type, void *object);
 LOCAL void onRefreshToken(const char *value, int length, int type, void *object);
 LOCAL void onExpiresIn(const char *value, int length, int type, void *object);
 
-LOCAL PathCallback trackCallbacks[] = {
-        {.callback = onTrackName},
-        {.callback = onArtistName},
-        {.callback = onAlbumName},
-        {.callback = onReleaseDate},
-        {.callback = onTrackDuration},
-        {.callback = onTrackProgress},
-        {.callback = onTrackIsPlaying}
-};
+#define TRACK_CALLBACKS_SIZE    7
+LOCAL PathCbPair trackCallbacks[TRACK_CALLBACKS_SIZE];
 
-LOCAL PathCallback tokensCallbacks[] = {
-        {.callback = onAccessToken},
-        {.callback = onRefreshToken},
-        {.callback = onExpiresIn}
-};
+#define TOKENS_CALLBACKS_SIZE   3
+LOCAL PathCbPair tokensCallbacks[TOKENS_CALLBACKS_SIZE];
 
 
 void ICACHE_FLASH_ATTR initPaths(void)
 {
-    pathInit(&trackCallbacks[0].path, "item", "name");
-    pathInit(&trackCallbacks[1].path, "item", "artists", "", "name");
+    bindPathCb(trackCallbacks[0], onTrackName, "item", "name");
+    bindPathCb(trackCallbacks[1], onArtistName, "item", "artists", "[", "name");
     if (config.showAlbum)
     {
-        pathInit(&trackCallbacks[2].path, "item", "album", "name");
-        pathInit(&trackCallbacks[3].path, "item", "album", "release_date");
+        bindPathCb(trackCallbacks[2], onAlbumName, "item", "album", "name");
+        bindPathCb(trackCallbacks[3], onReleaseDate, "item", "album", "release_date");
     }
     else
     {
-        pathInit(&trackCallbacks[2].path);
-        pathInit(&trackCallbacks[3].path);
+        bindPathCb(trackCallbacks[2], NULL, NULL);
+        bindPathCb(trackCallbacks[3], NULL, NULL);
     }
-    pathInit(&trackCallbacks[4].path, "item", "duration_ms");
-    pathInit(&trackCallbacks[5].path, "progress_ms");
-    pathInit(&trackCallbacks[6].path, "is_playing");
+    bindPathCb(trackCallbacks[4], onTrackDuration, "item", "duration_ms");
+    bindPathCb(trackCallbacks[5], onTrackProgress, "progress_ms");
+    bindPathCb(trackCallbacks[6], onTrackIsPlaying, "is_playing");
 
-    pathInit(&tokensCallbacks[0].path, "access_token");
-    pathInit(&tokensCallbacks[1].path, "refresh_token");
-    pathInit(&tokensCallbacks[2].path, "expires_in");
+    bindPathCb(tokensCallbacks[0], onAccessToken, "access_token");
+    bindPathCb(tokensCallbacks[1], onRefreshToken, "refresh_token");
+    bindPathCb(tokensCallbacks[2], onExpiresIn, "expires_in");
 }
 
 TrackParsed ICACHE_FLASH_ATTR parseTrackInfo(const char *json, int jsonLen, TrackInfo *track)
 {
-    parsejson(json, jsonLen, trackCallbacks, NELEMENTS(trackCallbacks), track);
+    parsejson(json, jsonLen, trackCallbacks, TRACK_CALLBACKS_SIZE, track);
     if (!config.showAlbum)
     {
         track->parsed |= eTrackAlbumParsed;
@@ -71,7 +60,7 @@ TrackParsed ICACHE_FLASH_ATTR parseTrackInfo(const char *json, int jsonLen, Trac
 
 TokensParsed ICACHE_FLASH_ATTR parseTokens(const char *json, int jsonLen, Tokens *tokens)
 {
-    parsejson(json, jsonLen, tokensCallbacks, NELEMENTS(tokensCallbacks), tokens);
+    parsejson(json, jsonLen, tokensCallbacks, TOKENS_CALLBACKS_SIZE, tokens);
     return tokens->parsed;
 }
 
@@ -154,7 +143,7 @@ LOCAL void ICACHE_FLASH_ATTR onAlbumName(const char *value, int length, int type
     }
 }
 
-static void onReleaseDate(const char *value, int length, int type, void *object)
+LOCAL void ICACHE_FLASH_ATTR onReleaseDate(const char *value, int length, int type, void *object)
 {
     //debug("onReleaseDate: value %s, len %d, type %c\n", value, length, (char)type);
 

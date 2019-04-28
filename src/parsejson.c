@@ -12,7 +12,7 @@ LOCAL void pathReplaceLast(Path *path, const char *str);
 LOCAL void pathPop(Path *path);
 LOCAL int pathEqual(const Path *p1, const Path *p2);
 
-void ICACHE_FLASH_ATTR parsejson(const char *json, int jsonLen, PathCallback *callbacks, size_t callbacksSize, void *object)
+void ICACHE_FLASH_ATTR parsejson(const char *json, int jsonLen, PathCbPair *callbacks, size_t callbacksSize, void *object)
 {
     int type;
     int curDepth = 0;
@@ -27,14 +27,10 @@ void ICACHE_FLASH_ATTR parsejson(const char *json, int jsonLen, PathCallback *ca
     {
         if (state.depth > curDepth)
         {
-            if (path.count && pathGetLast(&path) == NULL)
-            {
-                // make empty string for unnamed path segment
-                char *emptyStr = os_malloc(1);
-                emptyStr[0] = '\0';
-                pathReplaceLast(&path, emptyStr);
-            }
-            pathPush(&path, NULL);
+            char *str = os_malloc(2);
+            str[0] = (char)type;
+            str[1] = '\0';
+            pathPush(&path, str);
         }
         else if (state.depth < curDepth)
         {
@@ -51,10 +47,10 @@ void ICACHE_FLASH_ATTR parsejson(const char *json, int jsonLen, PathCallback *ca
 
             // search matching callbacks for current path
             size_t i;
-            for(i = 0; i < callbacksSize; i++)
+            for (i = 0; i < callbacksSize; i++)
             {
-                PathCallback *pathCb = &callbacks[i];
-                if (pathEqual(&path, &pathCb->path))
+                PathCbPair *pathCb = &callbacks[i];
+                if (pathEqual(&path, &pathCb->path) && pathCb->callback)
                 {
                     type = jsonparse_next(&state);
                     if (type)
@@ -106,66 +102,66 @@ void ICACHE_FLASH_ATTR pathInit_(Path *path, const char *str1, ...)
     va_end(args);
 }
 
-void ICACHE_FLASH_ATTR pathFree(Path *path, int freeStrings)
+void pathFree(Path *path, int freeSegments)
 {
-    if (freeStrings)
+    if (freeSegments)
     {
         while(path->count)
         {
             path->count--;
-            os_free(path->strings[path->count]);
+            os_free(path->segments[path->count]);
         }
     }
-    os_free(path->strings);
+    os_free(path->segments);
     path->capacity = 0;
     path->count = 0;
 }
 
-LOCAL ICACHE_FLASH_ATTR void pathAlloc(Path *path, size_t size)
+LOCAL void pathAlloc(Path *path, size_t size)
 {
-    path->strings = os_malloc(size * sizeof(char*));
+    path->segments = os_malloc(size * sizeof(char*));
     path->capacity = size;
     path->count = 0;
 }
 
-LOCAL ICACHE_FLASH_ATTR void pathPush(Path *path, const char *str)
+LOCAL void pathPush(Path *path, const char *str)
 {
     if (path->count < path->capacity)
     {
-        path->strings[path->count] = (char*)str;
+        path->segments[path->count] = (char*)str;
         path->count++;
     }
 }
 
-LOCAL ICACHE_FLASH_ATTR const char* pathGetLast(Path *path)
+LOCAL const char* pathGetLast(Path *path)
 {
     if (path->count)
     {
-        return path->strings[path->count - 1];
+        return path->segments[path->count - 1];
     }
     return NULL;
 }
 
-LOCAL ICACHE_FLASH_ATTR void pathReplaceLast(Path *path, const char *str)
+LOCAL void pathReplaceLast(Path *path, const char *str)
 {
     if (path->count)
     {
-        os_free(path->strings[path->count - 1]);
-        path->strings[path->count - 1] = (char*)str;
+        os_free(path->segments[path->count - 1]);
+        path->segments[path->count - 1] = (char*)str;
     }
 }
 
-LOCAL ICACHE_FLASH_ATTR void pathPop(Path *path)
+LOCAL void pathPop(Path *path)
 {
     if (path->count)
     {
         path->count--;
-        os_free(path->strings[path->count]);
-        path->strings[path->count] = NULL;
+        os_free(path->segments[path->count]);
+        path->segments[path->count] = NULL;
     }
 }
 
-LOCAL ICACHE_FLASH_ATTR int pathEqual(const Path *p1, const Path *p2)
+LOCAL int pathEqual(const Path *p1, const Path *p2)
 {
     if (p1->count != p2->count)
     {
@@ -174,7 +170,7 @@ LOCAL ICACHE_FLASH_ATTR int pathEqual(const Path *p1, const Path *p2)
     size_t i;
     for(i = 0; i < p1->count; i++)
     {
-        if (strcmp(p1->strings[i], p2->strings[i]))
+        if (strcmp(p1->segments[i], p2->segments[i]))
         {
             return FALSE;
         }
